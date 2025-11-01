@@ -1,4 +1,4 @@
-# Last wine-tkg-staging-fsync-git configuration - Sat Nov  1 12:21:19 PM UTC 2025 :
+# Last wine-tkg-staging-fsync-git configuration - Sat Nov  1 12:28:30 PM UTC 2025 :
 
 Local cfg files used
 
@@ -19,7 +19,6 @@ esync-unix-staging.patch -- ( Using Esync (unix, staging) patchset )
 fsync-unix-staging.patch -- ( Applied fsync patches (unix, staging) )
 fsync_futex_waitv.patch -- ( Applied patches for fsync to support futex_waitv )
 
-enable_dynamic_wow64_def.patch -- ( Enable WINEARCH=wow64 by default )
 LAA-unix-staging-wow64.patch -- ( Applied large address aware override support )
 
 proton-win10-default.patch -- ( Enforce win10 as default wine version )

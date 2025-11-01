@@ -531,7 +531,7 @@ static void init_paths(void)
 char *get_alternate_wineloader( WORD machine )
 {
     const char *arch;
-    BOOL force_wow64 = !(arch = getenv( "WINEARCH" )) || !strcmp( arch, "wow64" );
+    BOOL force_wow64 = (arch = getenv( "WINEARCH" )) && !strcmp( arch, "wow64" );
     char *ret = NULL;
 
     if (is_win64)
