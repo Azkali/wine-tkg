@@ -227,6 +227,7 @@ struct makefile
     struct strarray clean_files;
     struct strarray distclean_files;
     struct strarray maintainerclean_files;
+    struct strarray uninstall_files;
     struct strarray unixobj_files;
     struct strarray font_files;
     struct strarray debug_files;
@@ -238,6 +239,7 @@ struct makefile
     struct strarray ok_files[MAX_ARCHS];
     struct strarray res_files[MAX_ARCHS];
     struct strarray all_targets[MAX_ARCHS];
+    struct array    install_commands[NB_INSTALL_RULES];
 };
 
 static struct makefile *top_makefile;
@@ -270,14 +272,12 @@ static struct list compile_commands = LIST_INIT( compile_commands );
 
 struct install_command
 {
-    struct strarray args;    /* command line arguments */
-    struct strarray files;   /* source file names */
-    struct strarray targets; /* targets to build if any */
+    const char     *file;    /* source file name */
+    const char     *target;  /* target to build if any */
     const char     *dir;     /* dest directory */
     const char     *dest;    /* dest file name if different from file */
+    char            type;    /* type of install */
 };
-
-static struct array install_commands[NB_INSTALL_RULES];
 
 static const char Usage[] =
     "Usage: makedep [options]\n"
@@ -420,23 +420,21 @@ static void output_filenames( struct strarray array )
 
 
 /*******************************************************************
- *         output_multifiles_command
+ *         output_rm_filenames
  */
-static void output_multifiles_command( struct strarray files, const char *command, struct strarray args )
+static void output_rm_filenames( struct strarray array, const char *command )
 {
     static const unsigned int max_cmdline = 30000;  /* to be on the safe side */
     unsigned int len = 0;
 
-    if (!files.count) return;
+    if (!array.count) return;
     output( "\t%s", command );
-    output_filenames( args );
-    STRARRAY_FOR_EACH( file, &files )
+    STRARRAY_FOR_EACH( file, &array )
     {
         if (len > max_cmdline)
         {
             output( "\n" );
             output( "\t%s", command );
-            output_filenames( args );
             len = 0;
         }
         output_filename( file );
@@ -2348,30 +2346,9 @@ static struct strarray add_import_libs( const struct makefile *make, struct stra
 
 
 /*******************************************************************
- *         find_install_command
- */
-static struct install_command *find_install_command( enum install_rules rules, struct strarray args,
-                                                     const char *dir )
-{
-    unsigned int i;
-
-    ARRAY_FOR_EACH( cmd, &install_commands[rules], struct install_command )
-    {
-        if (strcmp( cmd->dir, dir )) continue;
-        if (args.count != cmd->args.count) continue;
-        for (i = 0; i < args.count; i++) if (strcmp( args.str[i], cmd->args.str[i] )) break;
-        if (i == args.count) return cmd;
-    }
-    return NULL;
-}
-
-
-/*******************************************************************
  *         add_install_command
  */
-static struct install_command *add_install_command( struct makefile *make, const char *target,
-                                                    struct strarray args, const char *dir,
-                                                    const char *dest )
+static struct install_command *add_install_command( struct makefile *make, const char *target )
 {
     unsigned int i;
     struct install_command *cmd = NULL;
@@ -2384,13 +2361,8 @@ static struct install_command *add_install_command( struct makefile *make, const
             strarray_exists( top_install[i], make->obj_dir ) ||
             strarray_exists( top_install[i], obj_dir_path( make, target )))
         {
-            if (!dest && (cmd = find_install_command( i, args, dir ))) return cmd;
-            cmd = ARRAY_ADD( &install_commands[i], struct install_command );
-            cmd->args = args;
-            cmd->dir  = dir;
-            cmd->dest = dest;
-            cmd->files = empty_strarray;
-            cmd->targets = empty_strarray;
+            cmd = ARRAY_ADD( &make->install_commands[i], struct install_command );
+            memset( cmd, 0, sizeof(*cmd) );
             break;
         }
     }
@@ -2404,18 +2376,14 @@ static struct install_command *add_install_command( struct makefile *make, const
 static void install_data_file( struct makefile *make, const char *target,
                                const char *obj, const char *dir, const char *dst )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
 
-    strarray_add( &args, "-m 644" );
-    strarray_add( &args, "$(INSTALL_DATA_FLAGS)" );
-
-    if ((cmd = add_install_command( make, target, args, dir, dst )))
-    {
-        char *file = obj_dir_path( make, obj );
-        strarray_add( &cmd->files, file );
-        strarray_add( &cmd->targets, file );
-    }
+    if (!(cmd = add_install_command( make, target ))) return;
+    cmd->file   = obj_dir_path( make, obj );
+    cmd->target = cmd->file;
+    cmd->dir    = dir;
+    cmd->dest   = dst;
+    cmd->type   = 'd';
 }
 
 
@@ -2425,14 +2393,12 @@ static void install_data_file( struct makefile *make, const char *target,
 static void install_data_file_src( struct makefile *make, const char *target,
                                    const char *src, const char *dir )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
 
-    strarray_add( &args, "-m 644" );
-    strarray_add( &args, "$(INSTALL_DATA_FLAGS)" );
-
-    if (!(cmd = add_install_command( make, target, args, dir, NULL ))) return;
-    strarray_add( &cmd->files, src_dir_path( make, src ));
+    if (!(cmd = add_install_command( make, target ))) return;
+    cmd->file   = src_dir_path( make, src );
+    cmd->dir    = dir;
+    cmd->type   = 'D';
 }
 
 
@@ -2463,19 +2429,13 @@ static void install_header( struct makefile *make, const char *target, const cha
 static void install_program( struct makefile *make, const char *target,
                              unsigned int arch, const char *obj, const char *dir )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
 
-    if (arch) strarray_add( &args, "-m 644" );
-    strarray_add( &args, strip_progs[arch] );
-    strarray_add( &args, "$(INSTALL_PROGRAM_FLAGS)" );
-
-    if ((cmd = add_install_command( make, target, args, dir, NULL )))
-    {
-        char *file = obj_dir_path( make, obj );
-        strarray_add( &cmd->files, file );
-        strarray_add( &cmd->targets, file );
-    }
+    if (!(cmd = add_install_command( make, target ))) return;
+    cmd->file   = obj_dir_path( make, obj );
+    cmd->target = cmd->file;
+    cmd->dir    = dir;
+    cmd->type   = '0' + arch;
 }
 
 
@@ -2484,13 +2444,12 @@ static void install_program( struct makefile *make, const char *target,
  */
 static void install_script( struct makefile *make, const char *src )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
 
-    strarray_add( &args, "$(INSTALL_SCRIPT_FLAGS)" );
-
-    if (!(cmd = add_install_command( make, src, args, "$(bindir)", NULL ))) return;
-    strarray_add( &cmd->files, src_dir_path( make, src ));
+    if (!(cmd = add_install_command( make, src ))) return;
+    cmd->file   = src_dir_path( make, src );
+    cmd->dir    = "$(bindir)";
+    cmd->type   = 'S';
 }
 
 
@@ -2500,24 +2459,22 @@ static void install_script( struct makefile *make, const char *src )
 static void install_program_symlink( struct makefile *make, const char *target,
                                      const char *obj, const char *dst )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
+
+    if (!(cmd = add_install_command( make, target ))) return;
+    cmd->dir    = "$(bindir)";
+    cmd->dest   = dst;
 
     if (symlinks_supported)
     {
-        strarray_add( &args, "-L" );
-
-        if (!(cmd = add_install_command( make, target, args, "$(bindir)", dst ))) return;
-        strarray_add( &cmd->files, get_basename( obj ));
+        cmd->file = get_basename( obj );
+        cmd->type = 'y';
     }
     else
     {
-        strarray_add( &args, strip_progs[0] );
-        strarray_add( &args, "$(INSTALL_PROGRAM_FLAGS)" );
-
-        if (!(cmd = add_install_command( make, target, args, "$(bindir)", dst ))) return;
-        strarray_add( &cmd->files, obj );
-        strarray_add( &cmd->targets, obj );
+        cmd->file   = obj;
+        cmd->target = cmd->file;
+        cmd->type   = 'p';
     }
 }
 
@@ -2528,27 +2485,22 @@ static void install_program_symlink( struct makefile *make, const char *target,
 static void install_data_symlink( struct makefile *make, const char *target, const char *obj,
                                   const char *link_name, const char *dir, const char *dst )
 {
-    struct strarray args = empty_strarray;
     struct install_command *cmd;
+
+    if (!(cmd = add_install_command( make, target ))) return;
+    cmd->dir    = dir;
+    cmd->dest   = dst;
 
     if (symlinks_supported)
     {
-        strarray_add( &args, "-L" );
-
-        if (!(cmd = add_install_command( make, target, args, dir, dst ))) return;
-        strarray_add( &cmd->files, link_name );
+        cmd->file = link_name;
+        cmd->type = 'y';
     }
     else
     {
-        strarray_add( &args, "-m 644" );
-        strarray_add( &args, "$(INSTALL_DATA_FLAGS)" );
-
-        if ((cmd = add_install_command( make, target, args, dir, dst )))
-        {
-            char *file = obj_dir_path( make, obj );
-            strarray_add( &cmd->files, file );
-            strarray_add( &cmd->targets, file );
-        }
+        cmd->file   = obj_dir_path( make, obj );
+        cmd->target = cmd->file;
+        cmd->type   = 'd';
     }
 }
 
@@ -2689,27 +2641,43 @@ static void output_srcdir_symlink( struct makefile *make, const char *obj )
 /*******************************************************************
  *         output_install_commands
  */
-static void output_install_commands( struct array commands )
+static void output_install_commands( struct makefile *make, enum install_rules rules )
 {
-    ARRAY_FOR_EACH( cmd, &commands, const struct install_command )
-    {
-        if (cmd->dest)
-        {
-            assert( cmd->files.count == 1 );
-            output( "\t%s", install );
-            output_filenames( cmd->args );
-            output_filenames( cmd->files );
-            output_filename( strmake( "$(DESTDIR)%s/%s", cmd->dir, cmd->dest ));
-            output( "\n" );
-        }
-        else
-        {
-            struct strarray args = empty_strarray;
+    unsigned int arch;
 
-            strarray_addall( &args, cmd->args );
-            strarray_add( &args, strmake( "-t $(DESTDIR)%s", cmd->dir ));
-            output_multifiles_command( cmd->files, install, args );
+    ARRAY_FOR_EACH( cmd, &make->install_commands[rules], const struct install_command )
+    {
+        const char *dest = strmake( "$(DESTDIR)%s/%s", cmd->dir, cmd->dest ? cmd->dest : get_basename( cmd->file ));
+
+        switch (cmd->type)
+        {
+        case '1': case '2': case '3': case '4': case '5':
+        case '6': case '7': case '8': case '9': /* arch-dependent program */
+            arch = cmd->type - '0';
+            output( "\t%s --strip-program=%s -m 644 $(INSTALL_PROGRAM_FLAGS)", install, strip_progs[arch] );
+            break;
+        case 'd':  /* data file */
+        case 'D':  /* data file in source dir */
+            output( "\t%s -m 644 $(INSTALL_DATA_FLAGS)", install );
+            break;
+        case '0':  /* native arch program file */
+        case 'p':  /* program file */
+        case 't':  /* tools file */
+            output( "\t%s --strip-program=\"$(STRIP)\" $(INSTALL_PROGRAM_FLAGS)", install );
+            break;
+        case 's':  /* script */
+        case 'S':  /* script in source dir */
+            output( "\t%s $(INSTALL_SCRIPT_FLAGS)", install );
+            break;
+        case 'y':  /* symlink */
+            output( "\t%s -L", install );
+            break;
+        default:
+            assert(0);
         }
+        if (cmd->dest) output( " %s $(DESTDIR)%s/%s\n", cmd->file, cmd->dir, cmd->dest );
+        else output( " -t $(DESTDIR)%s %s\n", cmd->dir, cmd->file );
+        strarray_add( &make->uninstall_files, dest );
     }
 }
 
@@ -2717,26 +2685,22 @@ static void output_install_commands( struct array commands )
 /*******************************************************************
  *         output_install_rules
  */
-static void output_install_rules( struct makefile *make )
+static void output_install_rules( struct makefile *make, enum install_rules rules )
 {
-    for (int i = 0; i < NB_INSTALL_RULES; i++)
-    {
-        struct strarray targets = empty_strarray;
+    struct strarray targets = empty_strarray;
 
-        if (!install_commands[i].count) continue;
+    if (!make->install_commands[rules].count) return;
 
-        ARRAY_FOR_EACH( cmd, &install_commands[i], const struct install_command )
-            strarray_addall_uniq( &targets, cmd->targets );
+    ARRAY_FOR_EACH( cmd, &make->install_commands[rules], const struct install_command )
+        if (cmd->target) strarray_add_uniq( &targets, cmd->target );
 
-        if (strcmp( install_targets[i], "install-test" )) output( "install " );
-        output( "%s::", install_targets[i] );
-        output_filenames( targets );
-        output_filename( install );
-        output( "\n" );
-        output_install_commands( install_commands[i] );
-        strarray_add_uniq( &make->phony_targets, "install" );
-        strarray_add_uniq( &make->phony_targets, install_targets[i] );
-    }
+    output( "%s %s::", obj_dir_path( make, "install" ), obj_dir_path( make, install_targets[rules] ));
+    output_filenames( targets );
+    output_filename( install );
+    output( "\n" );
+    output_install_commands( make, rules );
+    strarray_add_uniq( &make->phony_targets, obj_dir_path( make, "install" ));
+    strarray_add_uniq( &make->phony_targets, obj_dir_path( make, install_targets[rules] ));
 }
 
 
@@ -2782,41 +2746,29 @@ static void output_uninstall_rules( struct makefile *make )
     static const char *dirs_order[] =
         { "$(includedir)", "$(mandir)", "$(datadir)" };
 
-    struct strarray uninstall_dirs = empty_strarray, uninstall_files = empty_strarray;
+    struct strarray uninstall_dirs;
     unsigned int i, j;
 
-    for (i = 0; i < NB_INSTALL_RULES; i++)
-    {
-        ARRAY_FOR_EACH( cmd, &install_commands[i], const struct install_command )
-        {
-            strarray_add_uniq( &uninstall_dirs, cmd->dir );
-            if (cmd->dest)
-                strarray_add( &uninstall_files, strmake( "$(DESTDIR)%s/%s", cmd->dir, cmd->dest ));
-            else
-                STRARRAY_FOR_EACH( file, &cmd->files )
-                    strarray_add( &uninstall_files, strmake( "$(DESTDIR)%s/%s", cmd->dir, get_basename( file )));
-        }
-    }
-
+    if (!make->uninstall_files.count) return;
     output( "uninstall::\n" );
-    output_multifiles_command( uninstall_files, "rm -f", empty_strarray );
+    output_rm_filenames( make->uninstall_files, "rm -f" );
     strarray_add_uniq( &make->phony_targets, "uninstall" );
 
-    if (!uninstall_dirs.count) return;
-    strarray_addall_uniq( &uninstall_dirs, get_removable_dirs( uninstall_dirs ));
-    strarray_qsort( &uninstall_dirs, cmp_string_length );
+    if (!subdirs.count) return;
+    uninstall_dirs = get_removable_dirs( make->uninstall_files );
     output( "\t-rmdir" );
     for (i = 0; i < ARRAY_SIZE(dirs_order); i++)
     {
         for (j = 0; j < uninstall_dirs.count; j++)
         {
             if (!uninstall_dirs.str[j]) continue;
-            if (strncmp( uninstall_dirs.str[j], dirs_order[i], strlen(dirs_order[i]) )) continue;
-            output_filename( strmake( "$(DESTDIR)%s", uninstall_dirs.str[j] ));
+            if (strncmp( uninstall_dirs.str[j] + strlen("$(DESTDIR)"), dirs_order[i], strlen(dirs_order[i]) ))
+                continue;
+            output_filename( uninstall_dirs.str[j] );
             uninstall_dirs.str[j] = NULL;
         }
     }
-    STRARRAY_FOR_EACH( dir, &uninstall_dirs ) if (dir) output_filename( strmake( "$(DESTDIR)%s", dir ));
+    STRARRAY_FOR_EACH( dir, &uninstall_dirs ) if (dir) output_filename( dir );
     output( "\n" );
 }
 
@@ -3898,9 +3850,10 @@ static void output_subdirs( struct makefile *make )
     struct strarray distclean_files = empty_strarray;
     struct strarray distclean_dirs = empty_strarray;
     struct strarray dependencies = empty_strarray;
+    struct strarray install_deps[NB_INSTALL_RULES] = { empty_strarray };
     struct strarray tooldeps_deps = empty_strarray;
     struct strarray buildtest_deps = empty_strarray;
-    unsigned int i, arch;
+    unsigned int i, j, arch;
 
     strarray_addall( &clean_files, make->clean_files );
     strarray_addall( &distclean_files, make->distclean_files );
@@ -3912,6 +3865,7 @@ static void output_subdirs( struct makefile *make )
         strarray_addall( &subclean, get_removable_dirs( submakes[i]->distclean_files ));
         strarray_add( &makefile_deps, src_dir_path( submakes[i], "Makefile.in" ));
         strarray_addall_uniq( &make->phony_targets, submakes[i]->phony_targets );
+        strarray_addall_uniq( &make->uninstall_files, submakes[i]->uninstall_files );
         strarray_addall_uniq( &dependencies, submakes[i]->dependencies );
         strarray_addall_path( &clean_files, submakes[i]->obj_dir, submakes[i]->clean_files );
         strarray_addall_path( &sast_files, submakes[i]->obj_dir, submakes[i]->sast_files );
@@ -3933,6 +3887,9 @@ static void output_subdirs( struct makefile *make )
             strarray_add( &tooldeps_deps, obj_dir_path( submakes[i], "all" ));
         if (submakes[i]->testdll)
             strarray_add( &buildtest_deps, obj_dir_path( submakes[i], "all" ));
+        for (j = 0; j < NB_INSTALL_RULES; j++)
+            if (submakes[i]->install_commands[j].count)
+                strarray_add( &install_deps[j], obj_dir_path( submakes[i], install_targets[j] ));
     }
     strarray_addall( &dependencies, makefile_deps );
     output( "all:" );
@@ -3943,7 +3900,19 @@ static void output_subdirs( struct makefile *make )
     output( "\n" );
     output_filenames( dependencies );
     output( ":\n" );
-    output_install_rules( make );
+    for (j = 0; j < NB_INSTALL_RULES; j++)
+    {
+        if (!install_deps[j].count) continue;
+        if (strcmp( install_targets[j], "install-test" ))
+        {
+            output( "install " );
+            strarray_add_uniq( &make->phony_targets, "install" );
+        }
+        output( "%s::", install_targets[j] );
+        output_filenames( install_deps[j] );
+        output( "\n" );
+        strarray_add_uniq( &make->phony_targets, install_targets[j] );
+    }
     output_uninstall_rules( make );
     if (buildtest_deps.count)
     {
@@ -3980,14 +3949,14 @@ static void output_subdirs( struct makefile *make )
     if (get_expanded_make_variable( make, "GETTEXTPO_LIBS" )) output_po_files( make );
 
     output( "clean::\n");
-    output_multifiles_command( clean_files, "rm -f", empty_strarray );
+    output_rm_filenames( clean_files, "rm -f" );
     output( "testclean::\n");
-    output_multifiles_command( testclean_files, "rm -f", empty_strarray );
+    output_rm_filenames( testclean_files, "rm -f" );
     output( "distclean:: clean\n");
-    output_multifiles_command( distclean_files, "rm -f", empty_strarray );
-    output_multifiles_command( distclean_dirs, "-rmdir 2>/dev/null", empty_strarray );
+    output_rm_filenames( distclean_files, "rm -f" );
+    output_rm_filenames( distclean_dirs, "-rmdir 2>/dev/null" );
     output( "maintainer-clean::\n");
-    output_multifiles_command( make->maintainerclean_files, "rm -f", empty_strarray );
+    output_rm_filenames( make->maintainerclean_files, "rm -f" );
     strarray_add_uniq( &make->phony_targets, "distclean" );
     strarray_add_uniq( &make->phony_targets, "testclean" );
     strarray_add_uniq( &make->phony_targets, "maintainer-clean" );
@@ -4131,6 +4100,8 @@ static void output_sources( struct makefile *make )
         output( "\n" );
         strarray_add_uniq( &make->phony_targets, obj_dir_path( make, "all" ));
     }
+    for (i = 0; i < NB_INSTALL_RULES; i++) output_install_rules( make, i );
+
     if (make->clean_files.count)
     {
         output( "%s::\n", obj_dir_path( make, "clean" ));
@@ -4337,11 +4308,17 @@ static void output_stub_makefile( struct makefile *make )
 {
     struct strarray targets = empty_strarray;
     const char *make_var = strarray_get_value( top_makefile->vars, "MAKE" );
-    unsigned int arch;
+    unsigned int i, arch;
 
     for (arch = 0; arch < archs.count; arch++)
         if (make->all_targets[arch].count) strarray_add_uniq( &targets, "all" );
 
+    for (i = 0; i < NB_INSTALL_RULES; i++)
+    {
+        if (!make->install_commands[i].count) continue;
+        strarray_add_uniq( &targets, "install" );
+        strarray_add( &targets, install_targets[i] );
+    }
     if (make->clean_files.count) strarray_add( &targets, "clean" );
     if (make->test_files.count)
     {
@@ -4791,7 +4768,7 @@ int main( int argc, char *argv[] )
 
     arch_dirs[0] = "";
     arch_install_dirs[0] = unix_lib_supported ? strmake( "$(libdir)/wine/%s-unix", archs.str[0] ) : "$(libdir)/wine";
-    strip_progs[0] = "--strip-program=\"$(STRIP)\"";
+    strip_progs[0] = "\"$(STRIP)\"";
 
     for (arch = 1; arch < archs.count; arch++)
     {
@@ -4800,7 +4777,7 @@ int main( int argc, char *argv[] )
         strarray_add( &target_flags[arch], target );
         arch_dirs[arch] = strmake( "%s-windows/", archs.str[arch] );
         arch_install_dirs[arch] = strmake( "$(libdir)/wine/%s-windows", archs.str[arch] );
-        strip_progs[arch] = strmake( "--strip-program=\"%s --builtin --strip-cmd=%s\"",
+        strip_progs[arch] = strmake( "\"%s --builtin --strip-cmd=%s\"",
                                      winebuild, get_expanded_arch_var( top_makefile, "STRIP", arch ));
         dll_ext[arch] = "";
     }

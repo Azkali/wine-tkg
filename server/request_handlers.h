@@ -303,17 +303,23 @@ DECL_HANDLER(suspend_process);
 DECL_HANDLER(resume_process);
 DECL_HANDLER(get_next_process);
 DECL_HANDLER(get_next_thread);
+DECL_HANDLER(create_esync);
+DECL_HANDLER(open_esync);
+DECL_HANDLER(get_esync_fd);
+DECL_HANDLER(esync_msgwait);
 DECL_HANDLER(set_keyboard_repeat);
-DECL_HANDLER(get_inproc_sync_fd);
-DECL_HANDLER(get_inproc_alert_fd);
 DECL_HANDLER(d3dkmt_object_create);
 DECL_HANDLER(d3dkmt_object_update);
 DECL_HANDLER(d3dkmt_object_query);
 DECL_HANDLER(d3dkmt_object_open);
 DECL_HANDLER(d3dkmt_share_objects);
 DECL_HANDLER(d3dkmt_object_open_name);
-DECL_HANDLER(d3dkmt_mutex_acquire);
-DECL_HANDLER(d3dkmt_mutex_release);
+DECL_HANDLER(get_esync_apc_fd);
+DECL_HANDLER(create_fsync);
+DECL_HANDLER(open_fsync);
+DECL_HANDLER(get_fsync_idx);
+DECL_HANDLER(fsync_msgwait);
+DECL_HANDLER(get_fsync_apc_idx);
 
 typedef void (*req_handler)( const void *req, void *reply );
 static const req_handler req_handlers[REQ_NB_REQUESTS] =
@@ -614,17 +620,23 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_resume_process,
     (req_handler)req_get_next_process,
     (req_handler)req_get_next_thread,
+    (req_handler)req_create_esync,
+    (req_handler)req_open_esync,
+    (req_handler)req_get_esync_fd,
+    (req_handler)req_esync_msgwait,
     (req_handler)req_set_keyboard_repeat,
-    (req_handler)req_get_inproc_sync_fd,
-    (req_handler)req_get_inproc_alert_fd,
     (req_handler)req_d3dkmt_object_create,
     (req_handler)req_d3dkmt_object_update,
     (req_handler)req_d3dkmt_object_query,
     (req_handler)req_d3dkmt_object_open,
     (req_handler)req_d3dkmt_share_objects,
     (req_handler)req_d3dkmt_object_open_name,
-    (req_handler)req_d3dkmt_mutex_acquire,
-    (req_handler)req_d3dkmt_mutex_release,
+    (req_handler)req_get_esync_apc_fd,
+    (req_handler)req_create_fsync,
+    (req_handler)req_open_fsync,
+    (req_handler)req_get_fsync_idx,
+    (req_handler)req_fsync_msgwait,
+    (req_handler)req_get_fsync_apc_idx,
 };
 
 C_ASSERT( sizeof(abstime_t) == 8 );
@@ -727,9 +739,8 @@ C_ASSERT( offsetof(struct init_first_thread_reply, pid) == 8 );
 C_ASSERT( offsetof(struct init_first_thread_reply, tid) == 12 );
 C_ASSERT( offsetof(struct init_first_thread_reply, server_start) == 16 );
 C_ASSERT( offsetof(struct init_first_thread_reply, session_id) == 24 );
-C_ASSERT( offsetof(struct init_first_thread_reply, inproc_device) == 28 );
-C_ASSERT( offsetof(struct init_first_thread_reply, info_size) == 32 );
-C_ASSERT( sizeof(struct init_first_thread_reply) == 40 );
+C_ASSERT( offsetof(struct init_first_thread_reply, info_size) == 28 );
+C_ASSERT( sizeof(struct init_first_thread_reply) == 32 );
 C_ASSERT( offsetof(struct init_thread_request, unix_tid) == 12 );
 C_ASSERT( offsetof(struct init_thread_request, reply_fd) == 16 );
 C_ASSERT( offsetof(struct init_thread_request, wait_fd) == 20 );
@@ -1186,8 +1197,6 @@ C_ASSERT( sizeof(struct read_process_memory_reply) == 8 );
 C_ASSERT( offsetof(struct write_process_memory_request, handle) == 12 );
 C_ASSERT( offsetof(struct write_process_memory_request, addr) == 16 );
 C_ASSERT( sizeof(struct write_process_memory_request) == 24 );
-C_ASSERT( offsetof(struct write_process_memory_reply, written) == 8 );
-C_ASSERT( sizeof(struct write_process_memory_reply) == 16 );
 C_ASSERT( offsetof(struct create_key_request, access) == 12 );
 C_ASSERT( offsetof(struct create_key_request, options) == 16 );
 C_ASSERT( sizeof(struct create_key_request) == 24 );
@@ -1324,7 +1333,6 @@ C_ASSERT( offsetof(struct get_user_atom_name_reply, total) == 8 );
 C_ASSERT( sizeof(struct get_user_atom_name_reply) == 16 );
 C_ASSERT( sizeof(struct get_msg_queue_handle_request) == 16 );
 C_ASSERT( offsetof(struct get_msg_queue_handle_reply, handle) == 8 );
-C_ASSERT( offsetof(struct get_msg_queue_handle_reply, idle_event) == 12 );
 C_ASSERT( sizeof(struct get_msg_queue_handle_reply) == 16 );
 C_ASSERT( sizeof(struct get_msg_queue_request) == 16 );
 C_ASSERT( offsetof(struct get_msg_queue_reply, locator) == 8 );
@@ -1333,7 +1341,7 @@ C_ASSERT( offsetof(struct set_queue_fd_request, handle) == 12 );
 C_ASSERT( sizeof(struct set_queue_fd_request) == 16 );
 C_ASSERT( offsetof(struct set_queue_mask_request, wake_mask) == 12 );
 C_ASSERT( offsetof(struct set_queue_mask_request, changed_mask) == 16 );
-C_ASSERT( offsetof(struct set_queue_mask_request, poll_events) == 20 );
+C_ASSERT( offsetof(struct set_queue_mask_request, skip_wait) == 20 );
 C_ASSERT( sizeof(struct set_queue_mask_request) == 24 );
 C_ASSERT( offsetof(struct set_queue_mask_reply, wake_bits) == 8 );
 C_ASSERT( offsetof(struct set_queue_mask_reply, changed_bits) == 12 );
@@ -1844,11 +1852,11 @@ C_ASSERT( offsetof(struct create_class_request, local) == 12 );
 C_ASSERT( offsetof(struct create_class_request, atom) == 16 );
 C_ASSERT( offsetof(struct create_class_request, style) == 20 );
 C_ASSERT( offsetof(struct create_class_request, instance) == 24 );
-C_ASSERT( offsetof(struct create_class_request, client_ptr) == 32 );
-C_ASSERT( offsetof(struct create_class_request, cls_extra) == 40 );
-C_ASSERT( offsetof(struct create_class_request, win_extra) == 42 );
-C_ASSERT( offsetof(struct create_class_request, name_offset) == 44 );
-C_ASSERT( sizeof(struct create_class_request) == 48 );
+C_ASSERT( offsetof(struct create_class_request, extra) == 32 );
+C_ASSERT( offsetof(struct create_class_request, win_extra) == 36 );
+C_ASSERT( offsetof(struct create_class_request, client_ptr) == 40 );
+C_ASSERT( offsetof(struct create_class_request, name_offset) == 48 );
+C_ASSERT( sizeof(struct create_class_request) == 56 );
 C_ASSERT( offsetof(struct create_class_reply, locator) == 8 );
 C_ASSERT( offsetof(struct create_class_reply, atom) == 24 );
 C_ASSERT( sizeof(struct create_class_reply) == 32 );
@@ -2312,23 +2320,39 @@ C_ASSERT( offsetof(struct get_next_thread_request, flags) == 28 );
 C_ASSERT( sizeof(struct get_next_thread_request) == 32 );
 C_ASSERT( offsetof(struct get_next_thread_reply, handle) == 8 );
 C_ASSERT( sizeof(struct get_next_thread_reply) == 16 );
+C_ASSERT( offsetof(struct create_esync_request, access) == 12 );
+C_ASSERT( offsetof(struct create_esync_request, initval) == 16 );
+C_ASSERT( offsetof(struct create_esync_request, type) == 20 );
+C_ASSERT( offsetof(struct create_esync_request, max) == 24 );
+C_ASSERT( sizeof(struct create_esync_request) == 32 );
+C_ASSERT( offsetof(struct create_esync_reply, handle) == 8 );
+C_ASSERT( offsetof(struct create_esync_reply, type) == 12 );
+C_ASSERT( offsetof(struct create_esync_reply, shm_idx) == 16 );
+C_ASSERT( sizeof(struct create_esync_reply) == 24 );
+C_ASSERT( offsetof(struct open_esync_request, access) == 12 );
+C_ASSERT( offsetof(struct open_esync_request, attributes) == 16 );
+C_ASSERT( offsetof(struct open_esync_request, rootdir) == 20 );
+C_ASSERT( offsetof(struct open_esync_request, type) == 24 );
+C_ASSERT( sizeof(struct open_esync_request) == 32 );
+C_ASSERT( offsetof(struct open_esync_reply, handle) == 8 );
+C_ASSERT( offsetof(struct open_esync_reply, type) == 12 );
+C_ASSERT( offsetof(struct open_esync_reply, shm_idx) == 16 );
+C_ASSERT( sizeof(struct open_esync_reply) == 24 );
+C_ASSERT( offsetof(struct get_esync_fd_request, handle) == 12 );
+C_ASSERT( sizeof(struct get_esync_fd_request) == 16 );
+C_ASSERT( offsetof(struct get_esync_fd_reply, type) == 8 );
+C_ASSERT( offsetof(struct get_esync_fd_reply, shm_idx) == 12 );
+C_ASSERT( sizeof(struct get_esync_fd_reply) == 16 );
+C_ASSERT( offsetof(struct esync_msgwait_request, in_msgwait) == 12 );
+C_ASSERT( sizeof(struct esync_msgwait_request) == 16 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_request, enable) == 12 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_request, delay) == 16 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_request, period) == 20 );
 C_ASSERT( sizeof(struct set_keyboard_repeat_request) == 24 );
 C_ASSERT( offsetof(struct set_keyboard_repeat_reply, enable) == 8 );
 C_ASSERT( sizeof(struct set_keyboard_repeat_reply) == 16 );
-C_ASSERT( offsetof(struct get_inproc_sync_fd_request, handle) == 12 );
-C_ASSERT( sizeof(struct get_inproc_sync_fd_request) == 16 );
-C_ASSERT( offsetof(struct get_inproc_sync_fd_reply, type) == 8 );
-C_ASSERT( offsetof(struct get_inproc_sync_fd_reply, access) == 12 );
-C_ASSERT( sizeof(struct get_inproc_sync_fd_reply) == 16 );
-C_ASSERT( sizeof(struct get_inproc_alert_fd_request) == 16 );
-C_ASSERT( offsetof(struct get_inproc_alert_fd_reply, handle) == 8 );
-C_ASSERT( sizeof(struct get_inproc_alert_fd_reply) == 16 );
 C_ASSERT( offsetof(struct d3dkmt_object_create_request, type) == 12 );
 C_ASSERT( offsetof(struct d3dkmt_object_create_request, fd) == 16 );
-C_ASSERT( offsetof(struct d3dkmt_object_create_request, value) == 20 );
 C_ASSERT( sizeof(struct d3dkmt_object_create_request) == 24 );
 C_ASSERT( offsetof(struct d3dkmt_object_create_reply, global) == 8 );
 C_ASSERT( offsetof(struct d3dkmt_object_create_reply, handle) == 12 );
@@ -2364,18 +2388,32 @@ C_ASSERT( offsetof(struct d3dkmt_object_open_name_request, rootdir) == 24 );
 C_ASSERT( sizeof(struct d3dkmt_object_open_name_request) == 32 );
 C_ASSERT( offsetof(struct d3dkmt_object_open_name_reply, handle) == 8 );
 C_ASSERT( sizeof(struct d3dkmt_object_open_name_reply) == 16 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_request, mutex) == 12 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_request, key_value) == 16 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_request, wait_handle) == 20 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_request, wait_status) == 24 );
-C_ASSERT( sizeof(struct d3dkmt_mutex_acquire_request) == 32 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_reply, fence_value) == 8 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_reply, runtime_size) == 16 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_acquire_reply, wait_handle) == 20 );
-C_ASSERT( sizeof(struct d3dkmt_mutex_acquire_reply) == 24 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_release_request, mutex) == 12 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_release_request, abandon) == 16 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_release_request, key_value) == 20 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_release_request, fence_value) == 24 );
-C_ASSERT( offsetof(struct d3dkmt_mutex_release_request, runtime_size) == 32 );
-C_ASSERT( sizeof(struct d3dkmt_mutex_release_request) == 40 );
+C_ASSERT( sizeof(struct get_esync_apc_fd_request) == 16 );
+C_ASSERT( offsetof(struct create_fsync_request, access) == 12 );
+C_ASSERT( offsetof(struct create_fsync_request, low) == 16 );
+C_ASSERT( offsetof(struct create_fsync_request, high) == 20 );
+C_ASSERT( offsetof(struct create_fsync_request, type) == 24 );
+C_ASSERT( sizeof(struct create_fsync_request) == 32 );
+C_ASSERT( offsetof(struct create_fsync_reply, handle) == 8 );
+C_ASSERT( offsetof(struct create_fsync_reply, type) == 12 );
+C_ASSERT( offsetof(struct create_fsync_reply, shm_idx) == 16 );
+C_ASSERT( sizeof(struct create_fsync_reply) == 24 );
+C_ASSERT( offsetof(struct open_fsync_request, access) == 12 );
+C_ASSERT( offsetof(struct open_fsync_request, attributes) == 16 );
+C_ASSERT( offsetof(struct open_fsync_request, rootdir) == 20 );
+C_ASSERT( offsetof(struct open_fsync_request, type) == 24 );
+C_ASSERT( sizeof(struct open_fsync_request) == 32 );
+C_ASSERT( offsetof(struct open_fsync_reply, handle) == 8 );
+C_ASSERT( offsetof(struct open_fsync_reply, type) == 12 );
+C_ASSERT( offsetof(struct open_fsync_reply, shm_idx) == 16 );
+C_ASSERT( sizeof(struct open_fsync_reply) == 24 );
+C_ASSERT( offsetof(struct get_fsync_idx_request, handle) == 12 );
+C_ASSERT( sizeof(struct get_fsync_idx_request) == 16 );
+C_ASSERT( offsetof(struct get_fsync_idx_reply, type) == 8 );
+C_ASSERT( offsetof(struct get_fsync_idx_reply, shm_idx) == 12 );
+C_ASSERT( sizeof(struct get_fsync_idx_reply) == 16 );
+C_ASSERT( offsetof(struct fsync_msgwait_request, in_msgwait) == 12 );
+C_ASSERT( sizeof(struct fsync_msgwait_request) == 16 );
+C_ASSERT( sizeof(struct get_fsync_apc_idx_request) == 16 );
+C_ASSERT( offsetof(struct get_fsync_apc_idx_reply, shm_idx) == 8 );
+C_ASSERT( sizeof(struct get_fsync_apc_idx_reply) == 16 );

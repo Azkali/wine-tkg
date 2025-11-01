@@ -3038,7 +3038,10 @@ static struct hlsl_ir_node *add_user_call(struct hlsl_ctx *ctx,
             if (!param->default_values[j].string)
             {
                 value.u[0] = param->default_values[j].number;
-                comp = hlsl_block_add_constant(ctx, args->instrs, type, &value, loc);
+                if (!(comp = hlsl_new_constant(ctx, type, &value, loc)))
+                    return NULL;
+                hlsl_block_add_instr(args->instrs, comp);
+
                 hlsl_block_add_store_component(ctx, args->instrs, &param_deref, j, comp);
             }
         }
@@ -3953,6 +3956,7 @@ static bool intrinsic_firstbithigh(struct hlsl_ctx *ctx,
     struct hlsl_ir_node *operands[HLSL_MAX_OPERANDS] = {0};
     struct hlsl_type *type = params->args[0]->data_type;
     struct hlsl_ir_node *c, *clz, *eq, *xor;
+    struct hlsl_constant_value v;
 
     if (hlsl_version_lt(ctx, 4, 0))
         hlsl_error(ctx, loc, VKD3D_SHADER_ERROR_HLSL_INCOMPATIBLE_PROFILE,
@@ -3974,14 +3978,20 @@ static bool intrinsic_firstbithigh(struct hlsl_ctx *ctx,
     if (hlsl_version_lt(ctx, 5, 0))
         return add_expr(ctx, params->instrs, HLSL_OP1_FIND_MSB, operands, type, loc);
 
-    c = hlsl_block_add_uint_constant(ctx, params->instrs, 0x1f, loc);
+    v.u[0].u = 0x1f;
+    if (!(c = hlsl_new_constant(ctx, hlsl_get_scalar_type(ctx, HLSL_TYPE_UINT), &v, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, c);
 
     if (!(clz = add_expr(ctx, params->instrs, HLSL_OP1_CLZ, operands, type, loc)))
         return false;
     if (!(xor = add_binary_arithmetic_expr(ctx, params->instrs, HLSL_OP2_BIT_XOR, c, clz, loc)))
         return false;
 
-    c = hlsl_block_add_uint_constant(ctx, params->instrs, ~0u, loc);
+    v.u[0].i = -1;
+    if (!(c = hlsl_new_constant(ctx, hlsl_get_scalar_type(ctx, HLSL_TYPE_UINT), &v, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, c);
 
     if (!(eq = add_binary_comparison_expr(ctx, params->instrs, HLSL_OP2_EQUAL, clz, c, loc)))
         return false;
@@ -4033,7 +4043,9 @@ static bool intrinsic_fmod(struct hlsl_ctx *ctx, const struct parse_initializer 
     if (!(div = add_binary_arithmetic_expr(ctx, params->instrs, HLSL_OP2_DIV, x, y, loc)))
         return false;
 
-    zero = hlsl_block_add_constant(ctx, params->instrs, div->data_type, &zero_value, loc);
+    if (!(zero = hlsl_new_constant(ctx, div->data_type, &zero_value, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, zero);
 
     if (!(abs = add_unary_arithmetic_expr(ctx, params->instrs, HLSL_OP1_ABS, div, loc)))
         return false;
@@ -4629,8 +4641,9 @@ static bool intrinsic_sign(struct hlsl_ctx *ctx,
     struct hlsl_type *int_type = hlsl_get_numeric_type(ctx, arg->data_type->class, HLSL_TYPE_INT,
             arg->data_type->e.numeric.dimx, arg->data_type->e.numeric.dimy);
 
-    zero = hlsl_block_add_constant(ctx, params->instrs,
-            hlsl_get_scalar_type(ctx, arg->data_type->e.numeric.type), &zero_value, loc);
+    if (!(zero = hlsl_new_constant(ctx, hlsl_get_scalar_type(ctx, arg->data_type->e.numeric.type), &zero_value, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, zero);
 
     /* Check if 0 < arg, cast bool to int */
 

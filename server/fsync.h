@@ -1,5 +1,7 @@
 /*
- * Copyright (C) 2025 Paul Gofman for CodeWeavers
+ * futex-based synchronization objects
+ *
+ * Copyright (C) 2018 Zebediah Figura
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,27 +18,17 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#ifndef __WINE_TDH_H
-#define __WINE_TDH_H
+extern int do_fsync(void);
+extern void fsync_init(void);
+extern unsigned int fsync_alloc_shm( int low, int high );
+extern void fsync_wake_futex( unsigned int shm_idx );
+extern void fsync_clear_futex( unsigned int shm_idx );
+extern void fsync_wake_up( struct object *obj );
+extern void fsync_clear( struct object *obj );
 
-ULONG WINAPI TdhLoadManifest( WCHAR *manifest );
-ULONG WINAPI TdhLoadManifestFromBinary( WCHAR *binary );
+struct fsync;
 
-typedef struct _TRACE_PROVIDER_INFO
-{
-    GUID ProviderGuid;
-    ULONG SchemaSource;
-    ULONG ProviderNameOffset;
-}
-TRACE_PROVIDER_INFO;
-
-typedef struct _PROVIDER_ENUMERATION_INFO
-{
-    ULONG NumberOfProviders;
-    ULONG Reserved;
-    TRACE_PROVIDER_INFO TraceProviderInfoArray[ANYSIZE_ARRAY];
-}
-PROVIDER_ENUMERATION_INFO;
-
-ULONG WINAPI TdhEnumerateProviders( PROVIDER_ENUMERATION_INFO *buffer, ULONG *buffer_size );
-#endif
+extern const struct object_ops fsync_ops;
+extern void fsync_set_event( struct fsync *fsync );
+extern void fsync_reset_event( struct fsync *fsync );
+extern void fsync_abandon_mutexes( struct thread *thread );

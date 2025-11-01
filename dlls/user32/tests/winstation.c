@@ -1072,7 +1072,9 @@ static void test_invisible_winstation(char **argv)
     ret = CreateProcessA(argv[0], buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
     ok(ret, "CreateProcessA failed, error %lu.\n", GetLastError());
 
-    wait_child_process(&pi);
+    wait_child_process(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
     CloseDesktop(desktop);
     CloseWindowStation(winstation);
     SetProcessWindowStation(old_winstation);

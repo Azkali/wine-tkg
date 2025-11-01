@@ -2194,7 +2194,11 @@ static void subtest_query_process_debug_port_custom_dacl(int argc, char **argv, 
         if (!ret) break;
     } while (ev.dwDebugEventCode != EXIT_PROCESS_DEBUG_EVENT);
 
-    wait_child_process( &pi );
+    wait_child_process(pi.hProcess);
+    ret = CloseHandle(pi.hThread);
+    ok(ret, "CloseHandle failed, last error %#lx.\n", GetLastError());
+    ret = CloseHandle(pi.hProcess);
+    ok(ret, "CloseHandle failed, last error %#lx.\n", GetLastError());
 
 close_debug_obj:
     pDbgUiSetThreadDebugObject(old_debug_obj);

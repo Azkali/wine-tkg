@@ -1,7 +1,7 @@
 /*
- * DLL for testing self-registration
+ * eventfd-based synchronization objects
  *
- * Copyright 2018 Zebediah Figura
+ * Copyright (C) 2018 Zebediah Figura
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,25 +18,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#if 0
-#pragma makedep testdll
-#endif
+#include <unistd.h>
 
-#include <stdarg.h>
-#include <windef.h>
-#include <winbase.h>
-#include <winreg.h>
+extern int do_esync(void);
+void esync_init(void);
+int esync_create_fd( int initval, int flags );
+void esync_wake_fd( int fd );
+void esync_wake_up( struct object *obj );
+void esync_clear( int fd );
 
-HRESULT WINAPI DllRegisterServer(void)
-{
-    HKEY key;
-    RegCreateKeyA(HKEY_CLASSES_ROOT, "selfreg_test", &key);
-    RegCloseKey(key);
-    return S_OK;
-}
+struct esync;
 
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    RegDeleteKeyA(HKEY_CLASSES_ROOT, "selfreg_test");
-    return S_OK;
-}
+extern const struct object_ops esync_ops;
+void esync_set_event( struct esync *esync );
+void esync_reset_event( struct esync *esync );
+void esync_abandon_mutexes( struct thread *thread );

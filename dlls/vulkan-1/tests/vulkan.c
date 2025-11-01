@@ -1124,8 +1124,9 @@ static void test_cross_process_resource(VkPhysicalDeviceIDPropertiesKHR *device_
                                                         kmt ? "kmt" : "nt", handle);
     res = CreateProcessA(NULL, buf, NULL, NULL, TRUE, 0L, NULL, NULL, &si, &info);
     ok(res, "CreateProcess failed: %lu\n", GetLastError());
+    CloseHandle(info.hThread);
 
-    wait_child_process(&info);
+    wait_child_process(info.hProcess);
 }
 
 static void import_memory(VkDevice vk_device, VkMemoryAllocateInfo alloc_info, VkExternalMemoryHandleTypeFlagBits handle_type, HANDLE handle)

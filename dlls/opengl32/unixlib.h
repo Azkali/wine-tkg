@@ -3591,38 +3591,6 @@ struct glBlitFramebufferEXT_params
     GLenum filter;
 };
 
-struct glBlitFramebufferLayerEXT_params
-{
-    TEB *teb;
-    GLint srcX0;
-    GLint srcY0;
-    GLint srcX1;
-    GLint srcY1;
-    GLint srcLayer;
-    GLint dstX0;
-    GLint dstY0;
-    GLint dstX1;
-    GLint dstY1;
-    GLint dstLayer;
-    GLbitfield mask;
-    GLenum filter;
-};
-
-struct glBlitFramebufferLayersEXT_params
-{
-    TEB *teb;
-    GLint srcX0;
-    GLint srcY0;
-    GLint srcX1;
-    GLint srcY1;
-    GLint dstX0;
-    GLint dstY0;
-    GLint dstX1;
-    GLint dstY1;
-    GLbitfield mask;
-    GLenum filter;
-};
-
 struct glBlitNamedFramebuffer_params
 {
     TEB *teb;
@@ -3681,17 +3649,6 @@ struct glBufferPageCommitmentARB_params
     GLenum target;
     GLintptr offset;
     GLsizeiptr size;
-    GLboolean commit;
-};
-
-struct glBufferPageCommitmentMemNV_params
-{
-    TEB *teb;
-    GLenum target;
-    GLintptr offset;
-    GLsizeiptr size;
-    GLuint memory;
-    GLuint64 memOffset;
     GLboolean commit;
 };
 
@@ -5588,13 +5545,6 @@ struct glCreateSamplers_params
     GLuint *samplers;
 };
 
-struct glCreateSemaphoresNV_params
-{
-    TEB *teb;
-    GLsizei n;
-    GLuint *semaphores;
-};
-
 struct glCreateShader_params
 {
     TEB *teb;
@@ -6502,20 +6452,6 @@ struct glDrawMeshArraysSUN_params
     GLint first;
     GLsizei count;
     GLsizei width;
-};
-
-struct glDrawMeshTasksEXT_params
-{
-    TEB *teb;
-    GLuint num_groups_x;
-    GLuint num_groups_y;
-    GLuint num_groups_z;
-};
-
-struct glDrawMeshTasksIndirectEXT_params
-{
-    TEB *teb;
-    GLintptr indirect;
 };
 
 struct glDrawMeshTasksIndirectNV_params
@@ -8325,7 +8261,7 @@ struct glGetDebugMessageLogAMD_params
     GLuint count;
     GLsizei bufSize;
     GLenum *categories;
-    GLenum *severities;
+    GLuint *severities;
     GLuint *ids;
     GLsizei *lengths;
     GLchar *message;
@@ -10098,14 +10034,6 @@ struct glGetSamplerParameteriv_params
 {
     TEB *teb;
     GLuint sampler;
-    GLenum pname;
-    GLint *params;
-};
-
-struct glGetSemaphoreParameterivNV_params
-{
-    TEB *teb;
-    GLuint semaphore;
     GLenum pname;
     GLint *params;
 };
@@ -13155,29 +13083,12 @@ struct glMultiDrawElementsIndirectCountARB_params
     GLsizei stride;
 };
 
-struct glMultiDrawMeshTasksIndirectCountEXT_params
-{
-    TEB *teb;
-    GLintptr indirect;
-    GLintptr drawcount;
-    GLsizei maxdrawcount;
-    GLsizei stride;
-};
-
 struct glMultiDrawMeshTasksIndirectCountNV_params
 {
     TEB *teb;
     GLintptr indirect;
     GLintptr drawcount;
     GLsizei maxdrawcount;
-    GLsizei stride;
-};
-
-struct glMultiDrawMeshTasksIndirectEXT_params
-{
-    TEB *teb;
-    GLintptr indirect;
-    GLsizei drawcount;
     GLsizei stride;
 };
 
@@ -14676,17 +14587,6 @@ struct glNamedBufferPageCommitmentEXT_params
     GLboolean commit;
 };
 
-struct glNamedBufferPageCommitmentMemNV_params
-{
-    TEB *teb;
-    GLuint buffer;
-    GLintptr offset;
-    GLsizeiptr size;
-    GLuint memory;
-    GLuint64 memOffset;
-    GLboolean commit;
-};
-
 struct glNamedBufferStorage_params
 {
     TEB *teb;
@@ -14912,17 +14812,6 @@ struct glNamedFramebufferTextureLayerEXT_params
     GLuint texture;
     GLint level;
     GLint layer;
-};
-
-struct glNamedFramebufferTextureMultiviewOVR_params
-{
-    TEB *teb;
-    GLuint framebuffer;
-    GLenum attachment;
-    GLuint texture;
-    GLint level;
-    GLint baseViewIndex;
-    GLsizei numViews;
 };
 
 struct glNamedProgramLocalParameter4dEXT_params
@@ -18691,14 +18580,6 @@ struct glSelectTextureSGIS_params
     GLenum target;
 };
 
-struct glSemaphoreParameterivNV_params
-{
-    TEB *teb;
-    GLuint semaphore;
-    GLenum pname;
-    const GLint *params;
-};
-
 struct glSemaphoreParameterui64vEXT_params
 {
     TEB *teb;
@@ -18782,7 +18663,7 @@ struct glShaderBinary_params
     TEB *teb;
     GLsizei count;
     const GLuint *shaders;
-    GLenum binaryFormat;
+    GLenum binaryformat;
     const void *binary;
     GLsizei length;
 };
@@ -19889,23 +19770,6 @@ struct glTexPageCommitmentARB_params
     GLboolean commit;
 };
 
-struct glTexPageCommitmentMemNV_params
-{
-    TEB *teb;
-    GLenum target;
-    GLint layer;
-    GLint level;
-    GLint xoffset;
-    GLint yoffset;
-    GLint zoffset;
-    GLsizei width;
-    GLsizei height;
-    GLsizei depth;
-    GLuint memory;
-    GLuint64 offset;
-    GLboolean commit;
-};
-
 struct glTexParameterIiv_params
 {
     TEB *teb;
@@ -19970,26 +19834,7 @@ struct glTexStorage1D_params
     GLsizei width;
 };
 
-struct glTexStorage1DEXT_params
-{
-    TEB *teb;
-    GLenum target;
-    GLsizei levels;
-    GLenum internalformat;
-    GLsizei width;
-};
-
 struct glTexStorage2D_params
-{
-    TEB *teb;
-    GLenum target;
-    GLsizei levels;
-    GLenum internalformat;
-    GLsizei width;
-    GLsizei height;
-};
-
-struct glTexStorage2DEXT_params
 {
     TEB *teb;
     GLenum target;
@@ -20011,17 +19856,6 @@ struct glTexStorage2DMultisample_params
 };
 
 struct glTexStorage3D_params
-{
-    TEB *teb;
-    GLenum target;
-    GLsizei levels;
-    GLenum internalformat;
-    GLsizei width;
-    GLsizei height;
-    GLsizei depth;
-};
-
-struct glTexStorage3DEXT_params
 {
     TEB *teb;
     GLenum target;
@@ -20387,23 +20221,6 @@ struct glTexturePageCommitmentEXT_params
     GLsizei width;
     GLsizei height;
     GLsizei depth;
-    GLboolean commit;
-};
-
-struct glTexturePageCommitmentMemNV_params
-{
-    TEB *teb;
-    GLuint texture;
-    GLint layer;
-    GLint level;
-    GLint xoffset;
-    GLint yoffset;
-    GLint zoffset;
-    GLsizei width;
-    GLsizei height;
-    GLsizei depth;
-    GLuint memory;
-    GLuint64 offset;
     GLboolean commit;
 };
 
@@ -25992,15 +25809,12 @@ enum unix_funcs
     unix_glBlendParameteriNV,
     unix_glBlitFramebuffer,
     unix_glBlitFramebufferEXT,
-    unix_glBlitFramebufferLayerEXT,
-    unix_glBlitFramebufferLayersEXT,
     unix_glBlitNamedFramebuffer,
     unix_glBufferAddressRangeNV,
     unix_glBufferAttachMemoryNV,
     unix_glBufferData,
     unix_glBufferDataARB,
     unix_glBufferPageCommitmentARB,
-    unix_glBufferPageCommitmentMemNV,
     unix_glBufferParameteriAPPLE,
     unix_glBufferRegionEnabled,
     unix_glBufferStorage,
@@ -26191,7 +26005,6 @@ enum unix_funcs
     unix_glCreateQueries,
     unix_glCreateRenderbuffers,
     unix_glCreateSamplers,
-    unix_glCreateSemaphoresNV,
     unix_glCreateShader,
     unix_glCreateShaderObjectARB,
     unix_glCreateShaderProgramEXT,
@@ -26307,8 +26120,6 @@ enum unix_funcs
     unix_glDrawElementsInstancedBaseVertexBaseInstance,
     unix_glDrawElementsInstancedEXT,
     unix_glDrawMeshArraysSUN,
-    unix_glDrawMeshTasksEXT,
-    unix_glDrawMeshTasksIndirectEXT,
     unix_glDrawMeshTasksIndirectNV,
     unix_glDrawMeshTasksNV,
     unix_glDrawRangeElementArrayAPPLE,
@@ -26745,7 +26556,6 @@ enum unix_funcs
     unix_glGetSamplerParameterIuiv,
     unix_glGetSamplerParameterfv,
     unix_glGetSamplerParameteriv,
-    unix_glGetSemaphoreParameterivNV,
     unix_glGetSemaphoreParameterui64vEXT,
     unix_glGetSeparableFilter,
     unix_glGetSeparableFilterEXT,
@@ -27115,9 +26925,7 @@ enum unix_funcs
     unix_glMultiDrawElementsIndirectBindlessNV,
     unix_glMultiDrawElementsIndirectCount,
     unix_glMultiDrawElementsIndirectCountARB,
-    unix_glMultiDrawMeshTasksIndirectCountEXT,
     unix_glMultiDrawMeshTasksIndirectCountNV,
-    unix_glMultiDrawMeshTasksIndirectEXT,
     unix_glMultiDrawMeshTasksIndirectNV,
     unix_glMultiDrawRangeElementArrayAPPLE,
     unix_glMultiModeDrawArraysIBM,
@@ -27295,7 +27103,6 @@ enum unix_funcs
     unix_glNamedBufferDataEXT,
     unix_glNamedBufferPageCommitmentARB,
     unix_glNamedBufferPageCommitmentEXT,
-    unix_glNamedBufferPageCommitmentMemNV,
     unix_glNamedBufferStorage,
     unix_glNamedBufferStorageEXT,
     unix_glNamedBufferStorageExternalEXT,
@@ -27321,7 +27128,6 @@ enum unix_funcs
     unix_glNamedFramebufferTextureFaceEXT,
     unix_glNamedFramebufferTextureLayer,
     unix_glNamedFramebufferTextureLayerEXT,
-    unix_glNamedFramebufferTextureMultiviewOVR,
     unix_glNamedProgramLocalParameter4dEXT,
     unix_glNamedProgramLocalParameter4dvEXT,
     unix_glNamedProgramLocalParameter4fEXT,
@@ -27757,7 +27563,6 @@ enum unix_funcs
     unix_glSelectPerfMonitorCountersAMD,
     unix_glSelectTextureCoordSetSGIS,
     unix_glSelectTextureSGIS,
-    unix_glSemaphoreParameterivNV,
     unix_glSemaphoreParameterui64vEXT,
     unix_glSeparableFilter2D,
     unix_glSeparableFilter2DEXT,
@@ -27899,7 +27704,6 @@ enum unix_funcs
     unix_glTexImage3DMultisampleCoverageNV,
     unix_glTexImage4DSGIS,
     unix_glTexPageCommitmentARB,
-    unix_glTexPageCommitmentMemNV,
     unix_glTexParameterIiv,
     unix_glTexParameterIivEXT,
     unix_glTexParameterIuiv,
@@ -27908,12 +27712,9 @@ enum unix_funcs
     unix_glTexParameterxvOES,
     unix_glTexRenderbufferNV,
     unix_glTexStorage1D,
-    unix_glTexStorage1DEXT,
     unix_glTexStorage2D,
-    unix_glTexStorage2DEXT,
     unix_glTexStorage2DMultisample,
     unix_glTexStorage3D,
-    unix_glTexStorage3DEXT,
     unix_glTexStorage3DMultisample,
     unix_glTexStorageMem1DEXT,
     unix_glTexStorageMem2DEXT,
@@ -27945,7 +27746,6 @@ enum unix_funcs
     unix_glTextureMaterialEXT,
     unix_glTextureNormalEXT,
     unix_glTexturePageCommitmentEXT,
-    unix_glTexturePageCommitmentMemNV,
     unix_glTextureParameterIiv,
     unix_glTextureParameterIivEXT,
     unix_glTextureParameterIuiv,

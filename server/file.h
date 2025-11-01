@@ -108,7 +108,9 @@ extern void set_fd_signaled( struct fd *fd, int signaled );
 extern char *dup_fd_name( struct fd *root, const char *name ) __WINE_DEALLOC(free) __WINE_MALLOC;
 extern void get_nt_name( struct fd *fd, struct unicode_str *name );
 
-extern struct object *default_fd_get_sync( struct object *obj );
+extern int default_fd_signaled( struct object *obj, struct wait_queue_entry *entry );
+extern int default_fd_get_esync_fd( struct object *obj, enum esync_type *type );
+extern unsigned int default_fd_get_fsync_idx( struct object *obj, enum fsync_type *type );
 extern WCHAR *default_fd_get_full_name( struct object *obj, data_size_t max, data_size_t *ret_len );
 extern int default_fd_get_poll_events( struct fd *fd );
 extern void default_poll_event( struct fd *fd, int event );
@@ -199,7 +201,7 @@ extern struct mapping *create_session_mapping( struct object *root, const struct
 extern void set_session_mapping( struct mapping *mapping );
 
 extern session_shm_t *shared_session;
-extern volatile void *alloc_shared_object( mem_size_t shm_size );
+extern volatile void *alloc_shared_object(void);
 extern void free_shared_object( volatile void *object_shm );
 extern void invalidate_shared_object( volatile void *object_shm );
 extern struct obj_locator get_shared_object_locator( volatile void *object_shm );

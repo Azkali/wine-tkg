@@ -701,7 +701,7 @@
 # @ stub GetWindowCompositionInfo
 @ stdcall GetWindowContextHelpId(long) NtUserGetWindowContextHelpId
 @ stdcall GetWindowDC(long) NtUserGetWindowDC
-@ stdcall GetWindowDisplayAffinity(long ptr) NtUserGetWindowDisplayAffinity
+@ stdcall GetWindowDisplayAffinity(long ptr)
 @ stdcall GetWindowDpiAwarenessContext(long)
 @ stdcall GetWindowDpiHostingBehavior(long)
 # @ stub GetWindowFeedbackSetting

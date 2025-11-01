@@ -51,6 +51,8 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "uxtheme.h"
+#include "vssym32.h"
 #include "wine/debug.h"
 
 #include "comctl32.h"
@@ -536,7 +538,7 @@ static LRESULT CALLBACK BUTTON_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
             SetWindowLongW( hWnd, GWL_STYLE, style );
         }
         infoPtr->state = BST_UNCHECKED;
-        COMCTL32_OpenThemeForWindow( hWnd, WC_BUTTONW );
+        OpenThemeData( hWnd, WC_BUTTONW );
 
         parent = GetParent( hWnd );
         if (parent)
@@ -545,11 +547,16 @@ static LRESULT CALLBACK BUTTON_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
     }
 
     case WM_DESTROY:
-        COMCTL32_CloseThemeForWindow( hWnd );
+        theme = GetWindowTheme( hWnd );
+        CloseThemeData( theme );
         break;
 
     case WM_THEMECHANGED:
-        return COMCTL32_ThemeChanged( hWnd, WC_BUTTONW, TRUE, TRUE );
+        theme = GetWindowTheme( hWnd );
+        CloseThemeData( theme );
+        OpenThemeData( hWnd, WC_BUTTONW );
+        InvalidateRect( hWnd, NULL, TRUE );
+        break;
 
     case WM_ERASEBKGND:
         if (btn_type == BS_OWNERDRAW)

@@ -9,10 +9,9 @@ AC_PREREQ(2.63b)
 AC_INIT([Wine],[WINE_VERSION],[wine-devel@winehq.org],[wine],[https://www.winehq.org])
 AC_CONFIG_SRCDIR(server/atom.c)
 AC_CONFIG_HEADERS(include/config.h)
+AC_CONFIG_AUX_DIR(tools)
 
-dnl Work around install-sh requirement in autoconf <= 2.69
-AC_PREREQ([2.69d],[AC_CONFIG_AUX_DIR(tools)],
-                  [AC_PROVIDE([AC_CONFIG_AUX_DIR_DEFAULT])ac_aux_dir="${srcdir}/tools"])
+libwine_version="1.0"
 
 dnl **** Command-line arguments ****
 
@@ -677,13 +676,13 @@ AC_CHECK_HEADERS(\
 	link.h \
 	linux/cdrom.h \
 	linux/filter.h \
+	linux/futex.h \
 	linux/fs.h \
 	linux/hdreg.h \
 	linux/hidraw.h \
 	linux/input.h \
 	linux/ioctl.h \
 	linux/major.h \
-	linux/ntsync.h \
 	linux/param.h \
 	linux/seccomp.h \
 	linux/serial.h \
@@ -714,6 +713,7 @@ AC_CHECK_HEADERS(\
 	sys/cdio.h \
 	sys/epoll.h \
 	sys/event.h \
+	sys/eventfd.h \
 	sys/extattr.h \
 	sys/filio.h \
 	sys/ipc.h \
@@ -1486,7 +1486,7 @@ WINE_NOTICE_WITH(pcsclite,[test "x$PCSCLITE_LIBS" = x],
 dnl **** Check for inotify ****
 if test "x$with_inotify" != "xno"
 then
-    WINE_PACKAGE_FLAGS(INOTIFY,[libinotify],[-linotify],,,
+    WINE_PACKAGE_FLAGS(INOTIFY,[libinotify],,,,
         [AC_CHECK_HEADERS([sys/inotify.h])
          AC_CHECK_LIB(inotify,inotify_add_watch,[:],[INOTIFY_LIBS=""],[$INOTIFY_LIBS])])
 fi
@@ -2142,9 +2142,8 @@ AC_CHECK_FUNCS(\
 	port_create \
 	posix_fadvise \
 	posix_fallocate \
+	ppoll \
 	prctl \
-	process_vm_readv \
-	process_vm_writev \
 	sched_getcpu \
 	sched_yield \
 	renameat \
@@ -2165,6 +2164,12 @@ AC_SEARCH_LIBS(clock_gettime, rt,
                 test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
 LIBS=$ac_save_LIBS
 
+ac_save_LIBS=$LIBS
+AC_SEARCH_LIBS(shm_open, rt,
+               [AC_DEFINE(HAVE_SHM_OPEN, 1, [Define to 1 if you have the `shm_open' function.])
+                test "$ac_res" = "none required" || AC_SUBST(RT_LIBS,"$ac_res")])
+LIBS=$ac_save_LIBS
+
 AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
                 AC_LINK_IFELSE([AC_LANG_PROGRAM(
 [[#include <sched.h>]], [[sched_setaffinity(0, 0, 0);]])],[wine_cv_have_sched_setaffinity=yes],[wine_cv_have_sched_setaffinity=no]))
@@ -2174,6 +2179,8 @@ then
 fi
 
 dnl **** Check for types ****
+
+AC_CHECK_TYPES([request_sense],,,[#include <linux/cdrom.h>])
 
 AC_CACHE_CHECK([whether we can use re-entrant gethostbyname_r Linux style],
    	wine_cv_linux_gethostbyname_r_6,
@@ -2206,8 +2213,8 @@ AC_CHECK_MEMBERS([struct sockaddr_un.sun_len],,,
 # include <sys/un.h>
 #endif])
 
-dnl Check for sg_io_hdr_t members
-AC_CHECK_MEMBERS([sg_io_hdr_t.interface_id],,,
+dnl Check for scsireq_t and sg_io_hdr_t members
+AC_CHECK_MEMBERS([scsireq_t.cmd, sg_io_hdr_t.interface_id],,,
 [#include <sys/types.h>
 #ifdef HAVE_SCSI_SG_H
 #include <scsi/sg.h>
@@ -3217,7 +3224,6 @@ WINE_CONFIG_MAKEFILE(dlls/taskschd)
 WINE_CONFIG_MAKEFILE(dlls/taskschd/tests)
 WINE_CONFIG_MAKEFILE(dlls/tbs)
 WINE_CONFIG_MAKEFILE(dlls/tdh)
-WINE_CONFIG_MAKEFILE(dlls/tdh/tests)
 WINE_CONFIG_MAKEFILE(dlls/tdi.sys)
 WINE_CONFIG_MAKEFILE(dlls/threadpoolwinrt)
 WINE_CONFIG_MAKEFILE(dlls/threadpoolwinrt/tests)
@@ -3355,8 +3361,6 @@ WINE_CONFIG_MAKEFILE(dlls/windows.system.profile.systemid)
 WINE_CONFIG_MAKEFILE(dlls/windows.system.profile.systemid/tests)
 WINE_CONFIG_MAKEFILE(dlls/windows.system.profile.systemmanufacturers)
 WINE_CONFIG_MAKEFILE(dlls/windows.system.profile.systemmanufacturers/tests)
-WINE_CONFIG_MAKEFILE(dlls/windows.ui.core.textinput)
-WINE_CONFIG_MAKEFILE(dlls/windows.ui.core.textinput/tests)
 WINE_CONFIG_MAKEFILE(dlls/windows.ui.xaml)
 WINE_CONFIG_MAKEFILE(dlls/windows.ui.xaml/tests)
 WINE_CONFIG_MAKEFILE(dlls/windows.ui)
@@ -3778,7 +3782,7 @@ dnl Rules for generated source files
 
 WINE_APPEND_RULE(
 [dlls/ntdll/unix/version.c: dummy
-	@version=\`(echo \"wine-10.18.r0.g23267ac0\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[[]] = \"\\1  ( TkG Staging NTsync )\";/p'\` && (echo \$\$version | cmp -s - \$[@]) || echo \$\$version >\$[@] || (rm -f \$[@] && exit 1)
+	@version=\`(echo \"wine-10.17.r0.gf686957b\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[[]] = \"\\1  ( TkG Staging Esync Fsync )\";/p'\` && (echo \$\$version | cmp -s - \$[@]) || echo \$\$version >\$[@] || (rm -f \$[@] && exit 1)
 programs/winetest/build.rc: dummy
 	@build=\"STRINGTABLE { 1 \\\"\`GIT_DIR=${wine_srcdir}.git git rev-parse HEAD 2>/dev/null\`\\\" }\" && (echo \$\$build | cmp -s - \$[@]) || echo \$\$build >\$[@] || (rm -f \$[@] && exit 1)
 dlls/wineandroid.drv/wine-debug.apk: dlls/wineandroid.drv/build.gradle ${wine_srcdir}dlls/wineandroid.drv/AndroidManifest.xml ${wine_srcdir}dlls/wineandroid.drv/WineActivity.java ${wine_srcdir}dlls/wineandroid.drv/wine.svg

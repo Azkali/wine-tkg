@@ -1774,7 +1774,7 @@ static HRESULT wm_reader_read_stream_sample(struct wm_reader *reader, struct wg_
     {
         ERR("Failed to allocate sample of %lu bytes, hr %#lx.\n", capacity, hr);
         wg_parser_stream_release_buffer(stream->wg_stream);
-        return NS_E_NO_MORE_SAMPLES;
+        return hr;
     }
 
     if (FAILED(hr = INSSBuffer_GetBufferAndLength(*sample, &data, &size)))

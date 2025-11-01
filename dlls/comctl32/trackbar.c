@@ -32,6 +32,8 @@
 #include "winuser.h"
 #include "winnls.h"
 #include "commctrl.h"
+#include "uxtheme.h"
+#include "vssym32.h"
 #include "wine/debug.h"
 
 #include "comctl32.h"

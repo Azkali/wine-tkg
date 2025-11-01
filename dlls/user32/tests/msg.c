@@ -19296,11 +19296,11 @@ static void test_WaitForInputIdle( char *argv0 )
                 WaitForSingleObject( pi.hProcess, 1000 );  /* give it a chance to exit on its own */
             }
             TerminateProcess( pi.hProcess, 0 );  /* just in case */
-            ret = WaitForSingleObject( pi.hProcess, 30000 );
-            ok( !ret, "got %d\n", ret );
+            wait_child_process( pi.hProcess );
             ret = WaitForInputIdle( pi.hProcess, 100 );
             ok( ret == WAIT_FAILED, "%u: WaitForInputIdle after exit error %08x\n", i, ret );
-            wait_child_process( &pi );
+            CloseHandle( pi.hProcess );
+            CloseHandle( pi.hThread );
         }
     }
     CloseHandle( end_event );

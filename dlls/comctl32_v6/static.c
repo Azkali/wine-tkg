@@ -36,6 +36,7 @@
 #include "wingdi.h"
 #include "winuser.h"
 #include "commctrl.h"
+#include "uxtheme.h"
 
 #include "wine/debug.h"
 
@@ -527,7 +528,8 @@ static LRESULT CALLBACK STATIC_WindowProc( HWND hwnd, UINT uMsg, WPARAM wParam, 
         break;
 
     case WM_THEMECHANGED:
-        return COMCTL32_ThemeChanged( hwnd, NULL, TRUE, TRUE );
+        InvalidateRect( hwnd, 0, TRUE );
+        break;
 
     case WM_NCCREATE:
         {

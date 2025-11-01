@@ -974,8 +974,6 @@ struct obj_locator
 };
 
 #define MAX_ATOM_LEN     255
-#define WH_WINEVENT      (WH_MAXHOOK + 1)
-#define NB_HOOKS         (WH_WINEVENT - WH_MINHOOK + 1)
 
 struct shared_cursor
 {
@@ -996,13 +994,11 @@ typedef volatile struct
 
 typedef volatile struct
 {
-    timeout_t            access_time;
+    int                  hooks_count[WH_MAX - WH_MIN + 2];
     unsigned int         wake_mask;
     unsigned int         wake_bits;
     unsigned int         changed_mask;
     unsigned int         changed_bits;
-    unsigned int         internal_bits;
-    int                  hooks_count[NB_HOOKS];
 } queue_shm_t;
 
 typedef volatile struct
@@ -1024,16 +1020,9 @@ typedef volatile struct
 
 typedef volatile struct
 {
-    atom_t               atom;
-    unsigned int         style;
-    unsigned int         cls_extra;
-    unsigned int         win_extra;
-    mod_handle_t         instance;
     data_size_t          name_offset;
     data_size_t          name_len;
     WCHAR                name[MAX_ATOM_LEN];
-    unsigned short       __pad;
-    char                 extra[];
 } class_shm_t;
 
 typedef volatile struct
@@ -1181,10 +1170,8 @@ struct init_first_thread_reply
     thread_id_t  tid;
     timeout_t    server_start;
     unsigned int session_id;
-    obj_handle_t inproc_device;
     data_size_t  info_size;
     /* VARARG(machines,ushorts); */
-    char __pad_36[4];
 };
 
 
@@ -2547,8 +2534,6 @@ struct write_process_memory_request
 struct write_process_memory_reply
 {
     struct reply_header __header;
-    data_size_t written;
-    char __pad_12[4];
 };
 
 
@@ -3012,7 +2997,7 @@ struct get_msg_queue_handle_reply
 {
     struct reply_header __header;
     obj_handle_t handle;
-    obj_handle_t idle_event;
+    char __pad_12[4];
 };
 
 
@@ -3047,7 +3032,7 @@ struct set_queue_mask_request
     struct request_header __header;
     unsigned int wake_mask;
     unsigned int changed_mask;
-    int          poll_events;
+    int          skip_wait;
 };
 struct set_queue_mask_reply
 {
@@ -4522,11 +4507,12 @@ struct create_class_request
     atom_t         atom;
     unsigned int   style;
     mod_handle_t   instance;
+    int            extra;
+    int            win_extra;
     client_ptr_t   client_ptr;
-    short int      cls_extra;
-    short int      win_extra;
     data_size_t    name_offset;
     /* VARARG(name,unicode_str); */
+    char __pad_52[4];
 };
 struct create_class_reply
 {
@@ -5983,6 +5969,78 @@ struct get_next_thread_reply
     char __pad_12[4];
 };
 
+enum esync_type
+{
+    ESYNC_SEMAPHORE = 1,
+    ESYNC_AUTO_EVENT,
+    ESYNC_MANUAL_EVENT,
+    ESYNC_MUTEX,
+    ESYNC_AUTO_SERVER,
+    ESYNC_MANUAL_SERVER,
+    ESYNC_QUEUE,
+};
+
+
+struct create_esync_request
+{
+    struct request_header __header;
+    unsigned int access;
+    int          initval;
+    int          type;
+    int          max;
+    /* VARARG(objattr,object_attributes); */
+    char __pad_28[4];
+};
+struct create_esync_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    int          type;
+    unsigned int shm_idx;
+    char __pad_20[4];
+};
+
+struct open_esync_request
+{
+    struct request_header __header;
+    unsigned int access;
+    unsigned int attributes;
+    obj_handle_t rootdir;
+    int          type;
+    /* VARARG(name,unicode_str); */
+    char __pad_28[4];
+};
+struct open_esync_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    int          type;
+    unsigned int shm_idx;
+    char __pad_20[4];
+};
+
+
+struct get_esync_fd_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+};
+struct get_esync_fd_reply
+{
+    struct reply_header __header;
+    int          type;
+    unsigned int shm_idx;
+};
+
+struct esync_msgwait_request
+{
+    struct request_header __header;
+    int          in_msgwait;
+};
+struct esync_msgwait_reply
+{
+    struct reply_header __header;
+};
 
 
 struct set_keyboard_repeat_request
@@ -6000,51 +6058,14 @@ struct set_keyboard_repeat_reply
 };
 
 
-enum inproc_sync_type
-{
-    INPROC_SYNC_UNKNOWN   = 0,
-    INPROC_SYNC_INTERNAL  = 1,
-    INPROC_SYNC_EVENT     = 2,
-    INPROC_SYNC_MUTEX     = 3,
-    INPROC_SYNC_SEMAPHORE = 4,
-};
-
-
-struct get_inproc_sync_fd_request
-{
-    struct request_header __header;
-    obj_handle_t handle;
-};
-struct get_inproc_sync_fd_reply
-{
-    struct reply_header __header;
-    int           type;
-    unsigned int access;
-};
-
-
-
-struct get_inproc_alert_fd_request
-{
-    struct request_header __header;
-    char __pad_12[4];
-};
-struct get_inproc_alert_fd_reply
-{
-    struct reply_header __header;
-    obj_handle_t handle;
-    char __pad_12[4];
-};
-
-
 
 struct d3dkmt_object_create_request
 {
     struct request_header __header;
     unsigned int        type;
     int                 fd;
-    unsigned int        value;
     /* VARARG(runtime,bytes); */
+    char __pad_20[4];
 };
 struct d3dkmt_object_create_reply
 {
@@ -6142,41 +6163,100 @@ struct d3dkmt_object_open_name_reply
 };
 
 
-
-struct d3dkmt_mutex_acquire_request
+struct get_esync_apc_fd_request
 {
     struct request_header __header;
-    d3dkmt_handle_t     mutex;
-    unsigned int        key_value;
-    obj_handle_t        wait_handle;
-    unsigned int        wait_status;
+    char __pad_12[4];
+};
+struct get_esync_apc_fd_reply
+{
+    struct reply_header __header;
+};
+
+enum fsync_type
+{
+    FSYNC_SEMAPHORE = 1,
+    FSYNC_AUTO_EVENT,
+    FSYNC_MANUAL_EVENT,
+    FSYNC_MUTEX,
+    FSYNC_AUTO_SERVER,
+    FSYNC_MANUAL_SERVER,
+    FSYNC_QUEUE,
+};
+
+
+struct create_fsync_request
+{
+    struct request_header __header;
+    unsigned int access;
+    int low;
+    int high;
+    int type;
+    /* VARARG(objattr,object_attributes); */
     char __pad_28[4];
 };
-struct d3dkmt_mutex_acquire_reply
+struct create_fsync_reply
 {
     struct reply_header __header;
-    unsigned __int64    fence_value;
-    data_size_t         runtime_size;
-    obj_handle_t        wait_handle;
-    /* VARARG(runtime,bytes); */
+    obj_handle_t handle;
+    int type;
+    unsigned int shm_idx;
+    char __pad_20[4];
 };
 
 
-
-struct d3dkmt_mutex_release_request
+struct open_fsync_request
 {
     struct request_header __header;
-    d3dkmt_handle_t     mutex;
-    int                 abandon;
-    unsigned int        key_value;
-    unsigned __int64    fence_value;
-    data_size_t         runtime_size;
-    /* VARARG(runtime,bytes); */
-    char __pad_36[4];
+    unsigned int access;
+    unsigned int attributes;
+    obj_handle_t rootdir;
+    int          type;
+    /* VARARG(name,unicode_str); */
+    char __pad_28[4];
 };
-struct d3dkmt_mutex_release_reply
+struct open_fsync_reply
 {
     struct reply_header __header;
+    obj_handle_t handle;
+    int          type;
+    unsigned int shm_idx;
+    char __pad_20[4];
+};
+
+
+struct get_fsync_idx_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+};
+struct get_fsync_idx_reply
+{
+    struct reply_header __header;
+    int          type;
+    unsigned int shm_idx;
+};
+
+struct fsync_msgwait_request
+{
+    struct request_header __header;
+    int          in_msgwait;
+};
+struct fsync_msgwait_reply
+{
+    struct reply_header __header;
+};
+
+struct get_fsync_apc_idx_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct get_fsync_apc_idx_reply
+{
+    struct reply_header __header;
+    unsigned int shm_idx;
+    char __pad_12[4];
 };
 
 
@@ -6478,17 +6558,23 @@ enum request
     REQ_resume_process,
     REQ_get_next_process,
     REQ_get_next_thread,
+    REQ_create_esync,
+    REQ_open_esync,
+    REQ_get_esync_fd,
+    REQ_esync_msgwait,
     REQ_set_keyboard_repeat,
-    REQ_get_inproc_sync_fd,
-    REQ_get_inproc_alert_fd,
     REQ_d3dkmt_object_create,
     REQ_d3dkmt_object_update,
     REQ_d3dkmt_object_query,
     REQ_d3dkmt_object_open,
     REQ_d3dkmt_share_objects,
     REQ_d3dkmt_object_open_name,
-    REQ_d3dkmt_mutex_acquire,
-    REQ_d3dkmt_mutex_release,
+    REQ_get_esync_apc_fd,
+    REQ_create_fsync,
+    REQ_open_fsync,
+    REQ_get_fsync_idx,
+    REQ_fsync_msgwait,
+    REQ_get_fsync_apc_idx,
     REQ_NB_REQUESTS
 };
 
@@ -6792,17 +6878,23 @@ union generic_request
     struct resume_process_request resume_process_request;
     struct get_next_process_request get_next_process_request;
     struct get_next_thread_request get_next_thread_request;
+    struct create_esync_request create_esync_request;
+    struct open_esync_request open_esync_request;
+    struct get_esync_fd_request get_esync_fd_request;
+    struct esync_msgwait_request esync_msgwait_request;
     struct set_keyboard_repeat_request set_keyboard_repeat_request;
-    struct get_inproc_sync_fd_request get_inproc_sync_fd_request;
-    struct get_inproc_alert_fd_request get_inproc_alert_fd_request;
     struct d3dkmt_object_create_request d3dkmt_object_create_request;
     struct d3dkmt_object_update_request d3dkmt_object_update_request;
     struct d3dkmt_object_query_request d3dkmt_object_query_request;
     struct d3dkmt_object_open_request d3dkmt_object_open_request;
     struct d3dkmt_share_objects_request d3dkmt_share_objects_request;
     struct d3dkmt_object_open_name_request d3dkmt_object_open_name_request;
-    struct d3dkmt_mutex_acquire_request d3dkmt_mutex_acquire_request;
-    struct d3dkmt_mutex_release_request d3dkmt_mutex_release_request;
+    struct get_esync_apc_fd_request get_esync_apc_fd_request;
+    struct create_fsync_request create_fsync_request;
+    struct open_fsync_request open_fsync_request;
+    struct get_fsync_idx_request get_fsync_idx_request;
+    struct fsync_msgwait_request fsync_msgwait_request;
+    struct get_fsync_apc_idx_request get_fsync_apc_idx_request;
 };
 union generic_reply
 {
@@ -7104,19 +7196,25 @@ union generic_reply
     struct resume_process_reply resume_process_reply;
     struct get_next_process_reply get_next_process_reply;
     struct get_next_thread_reply get_next_thread_reply;
+    struct create_esync_reply create_esync_reply;
+    struct open_esync_reply open_esync_reply;
+    struct get_esync_fd_reply get_esync_fd_reply;
+    struct esync_msgwait_reply esync_msgwait_reply;
     struct set_keyboard_repeat_reply set_keyboard_repeat_reply;
-    struct get_inproc_sync_fd_reply get_inproc_sync_fd_reply;
-    struct get_inproc_alert_fd_reply get_inproc_alert_fd_reply;
     struct d3dkmt_object_create_reply d3dkmt_object_create_reply;
     struct d3dkmt_object_update_reply d3dkmt_object_update_reply;
     struct d3dkmt_object_query_reply d3dkmt_object_query_reply;
     struct d3dkmt_object_open_reply d3dkmt_object_open_reply;
     struct d3dkmt_share_objects_reply d3dkmt_share_objects_reply;
     struct d3dkmt_object_open_name_reply d3dkmt_object_open_name_reply;
-    struct d3dkmt_mutex_acquire_reply d3dkmt_mutex_acquire_reply;
-    struct d3dkmt_mutex_release_reply d3dkmt_mutex_release_reply;
+    struct get_esync_apc_fd_reply get_esync_apc_fd_reply;
+    struct create_fsync_reply create_fsync_reply;
+    struct open_fsync_reply open_fsync_reply;
+    struct get_fsync_idx_reply get_fsync_idx_reply;
+    struct fsync_msgwait_reply fsync_msgwait_reply;
+    struct get_fsync_apc_idx_reply get_fsync_apc_idx_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 928
+#define SERVER_PROTOCOL_VERSION 922
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

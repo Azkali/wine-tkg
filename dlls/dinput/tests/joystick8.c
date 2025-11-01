@@ -107,7 +107,9 @@ static void run_in_desktop_( const char *file, int line, char **argv,
     ok_(file, line)( ret, "CreateProcessA failed, error %lu\n", GetLastError() );
     if (!ret) return;
 
-    wait_child_process( &info );
+    wait_child_process( info.hProcess );
+    CloseHandle( info.hThread );
+    CloseHandle( info.hProcess );
 
     if (input)
     {

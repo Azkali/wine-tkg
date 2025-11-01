@@ -481,7 +481,9 @@ static void run_in_process_( const char *file, int line, char **argv, const char
     ok_(file, line)( ret, "CreateProcessA failed, error %lu\n", GetLastError() );
     if (!ret) return;
 
-    wait_child_process( &info );
+    wait_child_process( info.hProcess );
+    CloseHandle( info.hThread );
+    CloseHandle( info.hProcess );
 }
 
 #define run_in_desktop( a, b, c ) run_in_desktop_( __FILE__, __LINE__, a, b, c )
@@ -511,7 +513,9 @@ static void run_in_desktop_( const char *file, int line, char **argv,
     ok_(file, line)( ret, "CreateProcessA failed, error %lu\n", GetLastError() );
     if (!ret) return;
 
-    wait_child_process( &info );
+    wait_child_process( info.hProcess );
+    CloseHandle( info.hThread );
+    CloseHandle( info.hProcess );
 
     if (input)
     {
@@ -3158,7 +3162,9 @@ static void test_rawinput(const char* argv0)
     }
 
     SetEvent(process_ready);
-    winetest_wait_child_process(&process_info);
+    winetest_wait_child_process(process_info.hProcess);
+    CloseHandle(process_info.hProcess);
+    CloseHandle(process_info.hThread);
     CloseHandle(process_done);
     CloseHandle(process_start);
     CloseHandle(process_ready);
@@ -4310,8 +4316,8 @@ static void test_SendInput_mouse_messages(void)
 
     mouse_event( MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0 );
     wait_messages( 5, FALSE );
-    button_down_hwnd[1].message.hwnd = hwnd;
-    ok_seq( button_down_hwnd );
+    button_down_hwnd_todo[1].message.hwnd = hwnd;
+    ok_seq( button_down_hwnd_todo );
     mouse_event( MOUSEEVENTF_LEFTUP, 0, 0, 0, 0 );
     wait_messages( 5, FALSE );
     button_up_hwnd[1].message.hwnd = hwnd;

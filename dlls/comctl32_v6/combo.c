@@ -29,6 +29,8 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "uxtheme.h"
+#include "vssym32.h"
 #include "commctrl.h"
 #include "wine/debug.h"
 
@@ -397,7 +399,7 @@ static void CBGetDroppedControlRect( LPHEADCOMBO lphc, LPRECT lpRect)
  */
 static LRESULT COMBO_Create( HWND hwnd, LPHEADCOMBO lphc, HWND hwndParent, LONG style )
 {
-  COMCTL32_OpenThemeForWindow( hwnd, WC_COMBOBOXW );
+  OpenThemeData( hwnd, WC_COMBOBOXW );
   if( !CB_GETTYPE(lphc) ) lphc->dwStyle |= CBS_SIMPLE;
   if( CB_GETTYPE(lphc) != CBS_DROPDOWNLIST ) lphc->wState |= CBF_EDIT;
 
@@ -1659,6 +1661,7 @@ static LRESULT COMBO_GetComboBoxInfo(const HEADCOMBO *lphc, COMBOBOXINFO *pcbi)
 static LRESULT CALLBACK COMBO_WindowProc( HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam )
 {
     HEADCOMBO *lphc = (HEADCOMBO *)GetWindowLongPtrW( hwnd, 0 );
+    HTHEME theme;
 
     TRACE("[%p]: msg %#x, wp %Ix, lp %Ix\n", hwnd, message, wParam, lParam );
 
@@ -1688,11 +1691,16 @@ static LRESULT CALLBACK COMBO_WindowProc( HWND hwnd, UINT message, WPARAM wParam
     }
 
     case WM_DESTROY:
-        COMCTL32_CloseThemeForWindow( hwnd );
+        theme = GetWindowTheme( hwnd );
+        CloseThemeData( theme );
         break;
 
     case WM_THEMECHANGED:
-        return COMCTL32_ThemeChanged( hwnd, WC_COMBOBOXW, TRUE, TRUE );
+        theme = GetWindowTheme( hwnd );
+        CloseThemeData( theme );
+        OpenThemeData( hwnd, WC_COMBOBOXW );
+        InvalidateRect( hwnd, NULL, TRUE );
+        break;
 
     case WM_PRINTCLIENT:
     case WM_PAINT:

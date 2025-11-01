@@ -1390,7 +1390,9 @@ static void test_comctl32_classes(void)
         sprintf( path_name, "%s class %s", argv[0], classes[i] );
         ok( CreateProcessA( NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info ),
             "CreateProcess failed.\n" );
-        wait_child_process( &info );
+        wait_child_process( info.hProcess );
+        CloseHandle( info.hProcess );
+        CloseHandle( info.hThread );
     }
 }
 

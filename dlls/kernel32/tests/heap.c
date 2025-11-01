@@ -3400,7 +3400,12 @@ static void test_debug_heap( const char *argv0, DWORD flags )
     sprintf( buffer, "%s heap.c 0x%lx", argv0, flags );
     ret = CreateProcessA( NULL, buffer, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info );
     ok( ret, "failed to create child process error %lu\n", GetLastError() );
-    wait_child_process( &info );
+    if (ret)
+    {
+        wait_child_process( info.hProcess );
+        CloseHandle( info.hThread );
+        CloseHandle( info.hProcess );
+    }
     RegDeleteValueA( hkey, "GlobalFlag" );
     RegCloseKey( hkey );
     RegDeleteKeyA( HKEY_LOCAL_MACHINE, keyname );

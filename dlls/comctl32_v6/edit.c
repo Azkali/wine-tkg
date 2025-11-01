@@ -42,6 +42,8 @@
 #include "imm.h"
 #include "usp10.h"
 #include "commctrl.h"
+#include "uxtheme.h"
+#include "vsstyle.h"
 #include "comctl32.h"
 #include "wine/debug.h"
 
@@ -4443,7 +4445,7 @@ static LRESULT EDIT_WM_Create(EDITSTATE *es, const WCHAR *name)
 
     /* force scroll info update */
     EDIT_UpdateScrollInfo(es);
-    COMCTL32_OpenThemeForWindow(es->hwndSelf, WC_EDITW);
+    OpenThemeData(es->hwndSelf, WC_EDITW);
 
     /* The rule seems to return 1 here for success */
     /* Power Builder masked edit controls will crash  */
@@ -4461,8 +4463,10 @@ static LRESULT EDIT_WM_Create(EDITSTATE *es, const WCHAR *name)
 static LRESULT EDIT_WM_NCDestroy(EDITSTATE *es)
 {
     LINEDEF *pc, *pp;
+    HTHEME theme;
 
-    COMCTL32_CloseThemeForWindow(es->hwndSelf);
+    theme = GetWindowTheme(es->hwndSelf);
+    CloseThemeData(theme);
 
     /* The app can own the text buffer handle */
     if (es->hloc32W && (es->hloc32W != es->hlocapp))
@@ -4991,7 +4995,10 @@ static LRESULT CALLBACK EDIT_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         break;
 
     case WM_THEMECHANGED:
-        return COMCTL32_ThemeChanged(hwnd, WC_EDITW, TRUE, TRUE);
+        CloseThemeData(GetWindowTheme(hwnd));
+        OpenThemeData(hwnd, WC_EDITW);
+        InvalidateRect(hwnd, NULL, TRUE);
+        break;
 
     default:
         result = DefWindowProcW(hwnd, msg, wParam, lParam);

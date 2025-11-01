@@ -90,6 +90,8 @@
 #include "winioctl.h"
 #include "winternl.h"
 #include "unix_private.h"
+#include "esync.h"
+#include "fsync.h"
 #include "wine/list.h"
 #include "ntsyscalls.h"
 #include "wine/debug.h"
@@ -529,7 +531,7 @@ static void init_paths(void)
 char *get_alternate_wineloader( WORD machine )
 {
     const char *arch;
-    BOOL force_wow64 = (arch = getenv( "WINEARCH" )) && !strcmp( arch, "wow64" );
+    BOOL force_wow64 = !(arch = getenv( "WINEARCH" )) || !strcmp( arch, "wow64" );
     char *ret = NULL;
 
     if (is_win64)
@@ -1213,6 +1215,34 @@ const unixlib_entry_t unix_call_wow64_funcs[] =
 };
 
 #endif  /* _WIN64 */
+
+BOOL ac_odyssey;
+BOOL fsync_simulate_sched_quantum;
+
+static void hacks_init(void)
+{
+    static const char upc_exe[] = "Ubisoft Game Launcher\\upc.exe";
+    static const char ac_odyssey_exe[] = "ACOdyssey.exe";
+    const char *env_str;
+
+    if (main_argc > 1 && strstr(main_argv[1], ac_odyssey_exe))
+    {
+        ERR("HACK: AC Odyssey sync tweak on.\n");
+        ac_odyssey = TRUE;
+        return;
+    }
+    env_str = getenv("WINE_FSYNC_SIMULATE_SCHED_QUANTUM");
+    if (env_str)
+        fsync_simulate_sched_quantum = !!atoi(env_str);
+    else if (main_argc > 1)
+        fsync_simulate_sched_quantum = !!strstr(main_argv[1], upc_exe);
+    if (fsync_simulate_sched_quantum)
+        ERR("HACK: Simulating sched quantum in fsync.\n");
+
+    env_str = getenv("SteamGameId");
+    if (env_str && !strcmp(env_str, "50130"))
+        setenv("WINESTEAMNOEXEC", "1", 0);
+}
 
 
 static inline char *prepend( char *buffer, const char *str, size_t len )
@@ -1964,6 +1994,9 @@ static void start_main_thread(void)
     signal_init_threading();
     dbg_init();
     startup_info_size = server_init_process();
+    hacks_init();
+    fsync_init();
+    esync_init();
     virtual_map_user_shared_data();
     init_cpu_info();
     init_files();
@@ -2122,6 +2155,9 @@ static void apple_create_wine_thread( void *arg )
 
     pthread_attr_init( &attr );
     pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE );
+    /* Use the same QoS class as the process main thread (user-interactive). */
+    if (&pthread_attr_set_qos_class_np)
+        pthread_attr_set_qos_class_np( &attr, QOS_CLASS_USER_INTERACTIVE, 0 );
     if (pthread_create( &thread, &attr, apple_wine_thread, NULL )) exit(1);
     pthread_attr_destroy( &attr );
 }

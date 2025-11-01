@@ -844,7 +844,6 @@ static NTSTATUS key_export_ecc_public( struct key *key, UCHAR *buf, ULONG len, U
             FIXME( "unsupported curve %u\n", key->u.a.curve_id );
             return STATUS_NOT_IMPLEMENTED;
         }
-        break;
 
     case ALG_ID_ECDH_P256:
         magic = BCRYPT_ECDH_PUBLIC_P256_MAGIC;
@@ -880,7 +879,6 @@ static NTSTATUS key_export_ecc_public( struct key *key, UCHAR *buf, ULONG len, U
             FIXME( "unsupported curve %u\n", key->u.a.curve_id );
             return STATUS_NOT_IMPLEMENTED;
         }
-        break;
 
     case ALG_ID_ECDSA_P256:
         magic = BCRYPT_ECDSA_PUBLIC_P256_MAGIC;
@@ -1273,7 +1271,6 @@ static NTSTATUS key_export_ecc( struct key *key, UCHAR *buf, ULONG len, ULONG *r
             FIXME( "unsupported curve %u\n", key->u.a.curve_id );
             return STATUS_NOT_IMPLEMENTED;
         }
-        break;
 
     case ALG_ID_ECDH_P256:
         magic = BCRYPT_ECDH_PRIVATE_P256_MAGIC;
@@ -1309,7 +1306,6 @@ static NTSTATUS key_export_ecc( struct key *key, UCHAR *buf, ULONG len, ULONG *r
             FIXME( "unsupported curve %u\n", key->u.a.curve_id );
             return STATUS_NOT_IMPLEMENTED;
         }
-        break;
 
     case ALG_ID_ECDSA_P256:
         magic = BCRYPT_ECDSA_PRIVATE_P256_MAGIC;

@@ -44,7 +44,9 @@ static void run_in_process_( const char *file, int line, char **argv, const char
     ok_(file, line)( ret, "CreateProcessA failed, error %lu\n", GetLastError() );
     if (!ret) return;
 
-    wait_child_process( &info );
+    wait_child_process( info.hProcess );
+    CloseHandle( info.hThread );
+    CloseHandle( info.hProcess );
 }
 
 static void flush_events(void)
@@ -1688,7 +1690,10 @@ static void test_inter_process_messages( const char *argv0 )
         DispatchMessageW( &msg );
     } while (msg.message != WM_USER);
 
-    wait_child_process( &pi );
+    wait_child_process( pi.hProcess );
+
+    CloseHandle( pi.hThread );
+    CloseHandle( pi.hProcess );
 
     DestroyWindow( hwnd );
     UnregisterClassW( L"TestIPCClass", NULL );

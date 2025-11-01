@@ -2341,7 +2341,9 @@ static void test_create_device(void)
     startup.cb = sizeof(startup);
     ok(CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info), "CreateProcess failed.\n");
 
-    wait_child_process(&info);
+    wait_child_process(info.hProcess);
+    CloseHandle(info.hProcess);
+    CloseHandle(info.hThread);
 }
 
 static void test_device_interfaces(const D3D_FEATURE_LEVEL feature_level)

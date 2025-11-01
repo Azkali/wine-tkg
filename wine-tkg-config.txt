@@ -1,10 +1,11 @@
-# Last wine-tkg-staging-ntsync-git configuration - Sat Nov  1 12:14:31 PM UTC 2025 :
+# Last wine-tkg-staging-fsync-git configuration - Sat Nov  1 12:21:19 PM UTC 2025 :
 
 Local cfg files used
 
-Wine (plain) version: 10.18.r0.g1e998672cff
-Using wine-staging patchset (version 10.18.r0.g23267ac0)
+Wine (plain) version: 10.17.r0.gd62035da4aa
+Using wine-staging patchset (version 10.17.r0.gf686957b)
 
+Re-enable esync patches since Staging impl is disabled.
 Not using vkd3d native library for d3d12 translation (allows using vkd3d-proton)
 
 Done applying backports hotfixes (if any) - list available in prepare.log
@@ -14,7 +15,11 @@ CSMT-toggle.patch -- ( Applied CSMT toggle logic patch )
 
 Staging overrides, if any: 
 
+esync-unix-staging.patch -- ( Using Esync (unix, staging) patchset )
+fsync-unix-staging.patch -- ( Applied fsync patches (unix, staging) )
+fsync_futex_waitv.patch -- ( Applied patches for fsync to support futex_waitv )
 
+enable_dynamic_wow64_def.patch -- ( Enable WINEARCH=wow64 by default )
 LAA-unix-staging-wow64.patch -- ( Applied large address aware override support )
 
 proton-win10-default.patch -- ( Enforce win10 as default wine version )
@@ -26,6 +31,7 @@ wow64_loader_hack.patch -- ( Hack around loader name for EAC on 10.2+ )
 Applied hotfix Return_nt_filename_and_resolve_DOS_drive_path.mypatch
 Applied hotfix a608ef1.mypatch
 Applied hotfix nostale_mouse_fix.mypatch
+Applied hotfix HACK-user32-Always-call-get_message-request-after-waiting.mypatch
 Applied hotfix opencl-fixup.mypatch
 Applied your own patch disable-hidraw-and-evdev.mypatch
 Applied your own patch hags.mypatch

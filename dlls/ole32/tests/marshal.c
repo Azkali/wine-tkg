@@ -4126,29 +4126,34 @@ again:
     CloseHandle(handles[1]);
 }
 
-static void create_target_process(const char *arg, PROCESS_INFORMATION *pi)
+static HANDLE create_target_process(const char *arg)
 {
     char **argv;
     char cmdline[MAX_PATH];
     BOOL ret;
+    PROCESS_INFORMATION pi;
     STARTUPINFOA si = { 0 };
     si.cb = sizeof(si);
 
+    pi.hThread = NULL;
+    pi.hProcess = NULL;
     winetest_get_mainargs( &argv );
     sprintf(cmdline, "\"%s\" %s %s", argv[0], argv[1], arg);
-    ret = CreateProcessA(argv[0], cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, pi);
+    ret = CreateProcessA(argv[0], cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
     ok(ret, "CreateProcess failed with error: %lu\n", GetLastError());
+    if (pi.hThread) CloseHandle(pi.hThread);
+    return pi.hProcess;
 }
 
 /* tests functions commonly used by out of process COM servers */
 static void test_local_server(void)
 {
-    PROCESS_INFORMATION process_info;
     DWORD cookie;
     HRESULT hr;
     IClassFactory * cf;
     IPersist *persist;
     DWORD ret;
+    HANDLE process;
     HANDLE quit_event;
     HANDLE ready_event;
     HANDLE repeat_event;
@@ -4209,7 +4214,8 @@ static void test_local_server(void)
 
     CloseHandle(heventShutdown);
 
-    create_target_process("-Embedding", &process_info);
+    process = create_target_process("-Embedding");
+    ok(process != NULL, "couldn't start local server process, error was %ld\n", GetLastError());
 
     ready_event = CreateEventA(NULL, FALSE, FALSE, "Wine COM Test Ready Event");
     ok( !WaitForSingleObject(ready_event, 10000), "wait timed out\n" );
@@ -4240,8 +4246,9 @@ static void test_local_server(void)
     quit_event = CreateEventA(NULL, FALSE, FALSE, "Wine COM Test Quit Event");
     SetEvent(quit_event);
 
-    wait_child_process(&process_info);
+    wait_child_process( process );
     CloseHandle(quit_event);
+    CloseHandle(process);
 }
 
 struct git_params
