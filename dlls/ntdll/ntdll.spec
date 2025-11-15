@@ -142,6 +142,7 @@
 # @ stub NtAddBootEntry
 @ stdcall -syscall NtAdjustGroupsToken(long long ptr long ptr ptr)
 @ stdcall -syscall=0x0041 NtAdjustPrivilegesToken(long long ptr long ptr ptr)
+@ stdcall -syscall NtAlertMultipleThreadByThreadId(ptr long ptr ptr)
 @ stdcall -syscall NtAlertResumeThread(long ptr)
 @ stdcall -syscall NtAlertThread(long)
 @ stdcall -syscall NtAlertThreadByThreadId(ptr)
@@ -1215,6 +1216,7 @@
 # @ stub ZwAddBootEntry
 @ stdcall -private ZwAdjustGroupsToken(long long ptr long ptr ptr) NtAdjustGroupsToken
 @ stdcall -private ZwAdjustPrivilegesToken(long long ptr long ptr ptr) NtAdjustPrivilegesToken
+@ stdcall -private ZwAlertMultipleThreadByThreadId(ptr long ptr ptr) NtAlertMultipleThreadByThreadId
 @ stdcall -private ZwAlertResumeThread(long ptr) NtAlertResumeThread
 @ stdcall -private ZwAlertThread(long) NtAlertThread
 @ stdcall -private ZwAlertThreadByThreadId(ptr) NtAlertThreadByThreadId
@@ -1766,6 +1768,3 @@
 @ cdecl wine_get_version()
 @ cdecl wine_get_build_id()
 @ cdecl wine_get_host_version(ptr ptr)
-
-# Filesystem
-@ stdcall -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)

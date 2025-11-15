@@ -174,7 +174,7 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
     }
 
     conf->state = window_state;
-    conf->scale = NtUserGetSystemDpiForProcess(0) / 96.0;
+    conf->scale = conf->fractional_scale * NtUserGetSystemDpiForProcess(0) / 96.0;
     conf->visible = (style & WS_VISIBLE) == WS_VISIBLE;
     conf->managed = data->managed;
 }
@@ -436,14 +436,14 @@ BOOL WAYLAND_WindowPosChanging(HWND hwnd, UINT swp_flags, BOOL shaped, const str
 /***********************************************************************
  *           WAYLAND_WindowPosChanged
  */
-void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UINT swp_flags, BOOL fullscreen,
+void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UINT swp_flags,
                               const struct window_rects *new_rects, struct window_surface *surface)
 {
     HWND toplevel = NtUserGetAncestor(hwnd, GA_ROOT);
     struct wayland_surface *toplevel_surface;
     struct wayland_client_surface *client;
     struct wayland_win_data *data, *toplevel_data;
-    BOOL managed;
+    BOOL managed, fullscreen = swp_flags & WINE_SWP_FULLSCREEN;
 
     TRACE("hwnd %p new_rects %s after %p flags %08x\n", hwnd, debugstr_window_rects(new_rects), insert_after, swp_flags);
 
