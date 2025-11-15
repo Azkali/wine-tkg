@@ -1,4 +1,4 @@
-# Last wine-tkg-staging-ntsync-git configuration - Sat Nov 15 09:36:24 AM UTC 2025 :
+# Last wine-tkg-staging-ntsync-git configuration - Sat Nov 15 02:41:23 PM UTC 2025 :
 
 Local cfg files used
 
@@ -16,7 +16,6 @@ Staging overrides, if any:
 
 
 LAA-unix-staging-wow64.patch -- ( Applied large address aware override support )
-ge-wayland.patch -- ( Applied large address aware override support )
 
 proton-win10-default.patch -- ( Enforce win10 as default wine version )
 proton_battleye.patch -- ( Add support for Proton's Battleye runtime )

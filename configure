@@ -983,7 +983,6 @@ enable_adsldp
 enable_adsldpc
 enable_advapi32
 enable_advpack
-enable_amdxc64
 enable_amsi
 enable_amstream
 enable_apisetschema
@@ -22335,7 +22334,6 @@ wine_fn_config_makefile dlls/advapi32 enable_advapi32
 wine_fn_config_makefile dlls/advapi32/tests enable_tests
 wine_fn_config_makefile dlls/advpack enable_advpack
 wine_fn_config_makefile dlls/advpack/tests enable_tests
-wine_fn_config_makefile dlls/amdxc64 enable_amdxc64
 wine_fn_config_makefile dlls/amsi enable_amsi
 wine_fn_config_makefile dlls/amstream enable_amstream
 wine_fn_config_makefile dlls/amstream/tests enable_tests
