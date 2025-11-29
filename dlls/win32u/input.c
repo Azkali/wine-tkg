@@ -1982,11 +1982,11 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
         if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) ))
             goto clear_flags;
 
-        if (is_window(previous))
+        if (is_window( previous ))
         {
             send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
             send_message( previous, WM_ACTIVATE,
-                          MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ), (LPARAM)hwnd );
+                          MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ? 0x20 : 0 ), (LPARAM)hwnd );
         }
     }
 
@@ -2050,7 +2050,7 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
     {
         send_message( hwnd, WM_NCACTIVATE, hwnd == NtUserGetForegroundWindow(), (LPARAM)previous );
         send_message( hwnd, WM_ACTIVATE,
-                      MAKEWPARAM( mouse ? WA_CLICKACTIVE : WA_ACTIVE, is_iconic(hwnd) ),
+                      MAKEWPARAM( mouse ? WA_CLICKACTIVE : WA_ACTIVE, is_iconic(hwnd) ? 0x20 : 0 ),
                       (LPARAM)previous );
         if (NtUserGetAncestor( hwnd, GA_PARENT ) == get_desktop_window())
             NtUserPostMessage( get_desktop_window(), WM_PARENTNOTIFY, WM_NCACTIVATE, (LPARAM)hwnd );
@@ -2153,7 +2153,7 @@ HWND WINAPI NtUserSetFocus( HWND hwnd )
         if (call_hooks( WH_CBT, HCBT_SETFOCUS, (WPARAM)hwnd, (LPARAM)previous, 0 )) return 0;
 
         /* activate hwndTop if needed. */
-        if (!(active = get_active_window()) && !set_foreground_window( hwndTop, FALSE )) return 0;
+        if (!(active = get_active_window()) && !set_foreground_window( hwndTop, FALSE, FALSE )) return 0;
         if (hwndTop != active)
         {
             if (!set_active_window( hwndTop, NULL, FALSE, FALSE, 0 )) return 0;
@@ -2178,13 +2178,13 @@ HWND WINAPI NtUserSetFocus( HWND hwnd )
  */
 BOOL WINAPI NtUserSetForegroundWindow( HWND hwnd )
 {
-    return set_foreground_window( hwnd, FALSE );
+    return set_foreground_window( hwnd, FALSE, FALSE );
 }
 
 /*******************************************************************
  *		set_foreground_window
  */
-BOOL set_foreground_window( HWND hwnd, BOOL mouse )
+BOOL set_foreground_window( HWND hwnd, BOOL mouse, BOOL internal )
 {
     BOOL ret, send_msg_old = FALSE, send_msg_new = FALSE;
     DWORD new_thread_id;
@@ -2196,6 +2196,7 @@ BOOL set_foreground_window( HWND hwnd, BOOL mouse )
     SERVER_START_REQ( set_foreground_window )
     {
         req->handle = wine_server_user_handle( hwnd );
+        req->internal = internal;
         if ((ret = !wine_server_call_err( req )))
         {
             previous = wine_server_ptr_handle( reply->previous );

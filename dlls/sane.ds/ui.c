@@ -28,6 +28,7 @@
 #include "winnls.h"
 #include "wingdi.h"
 #include "prsht.h"
+#include "commctrl.h"
 #include "wine/debug.h"
 #include "resource.h"
 
@@ -52,7 +53,6 @@ typedef struct
 } ScannerOption;
 
 static char reg_path[MAX_PATH];
-static int gOptCount;
 
 static INT_PTR CALLBACK DialogProc (HWND , UINT , WPARAM , LPARAM );
 static INT CALLBACK PropSheetProc(HWND, UINT,LPARAM);
@@ -382,7 +382,8 @@ static LPDLGTEMPLATEW create_options_page(HDC hdc, int *from_index,
                 return NULL;
             }
         }
-        if (!opt.is_active)
+        if (!opt.is_active ||
+            (opt.type==TYPE_INT && opt.size!=sizeof(int)))
             continue;
 
         len = create_item(hdc, &opt, ID_BASE + i, &item_tpl, y, &x, &count);
@@ -507,8 +508,6 @@ BOOL DoScannerUI(void)
 
     hdc = CreateCompatibleDC(0);
 
-    gOptCount = optcount;
-
     while (index < optcount)
     {
         struct option_descriptor opt;
@@ -539,12 +538,6 @@ BOOL DoScannerUI(void)
     len = lstrlenA(activeDS.identity.Manufacturer)
          + lstrlenA(activeDS.identity.ProductName) + 2;
     szCaption = malloc(len *sizeof(WCHAR));
-
-    snprintf(reg_path, MAX_PATH, "Software\\ScannersSettings\\%s\\%s_%s",
-             activeDS.identity.Manufacturer,
-             activeDS.identity.ProductFamily,
-             activeDS.identity.ProductName);
-
     MultiByteToWideChar(CP_ACP,0,activeDS.identity.Manufacturer,-1,
             szCaption,len);
     szCaption[lstrlenA(activeDS.identity.Manufacturer)] = ' ';
@@ -588,37 +581,6 @@ static BOOL save_to_reg( DWORD reg_type, CHAR* name, const BYTE* value, DWORD si
         return FALSE;
 
     res = RegSetValueExA( h_key, name, 0, reg_type, value, size );
-    RegCloseKey( h_key );
-    return res == ERROR_SUCCESS;
-}
-
-static BOOL load_from_reg( int opt_type, CHAR* name, void* value )
-{
-    HKEY h_key;
-    DWORD flag, size;
-    LSTATUS res;
-
-    if (RegOpenKeyExA( HKEY_CURRENT_USER, reg_path, 0, KEY_ALL_ACCESS, &h_key )) return FALSE;
-
-    switch( opt_type )
-    {
-        case TYPE_INT:
-        case TYPE_FIXED:
-        case TYPE_BOOL:
-            flag = RRF_RT_REG_DWORD;
-            size = sizeof(DWORD);
-            break;
-        case TYPE_STRING:
-            flag = RRF_RT_REG_SZ;
-            size = OPTION_VALUE_MAX;
-            break;
-        default:
-            RegCloseKey( h_key );
-            ERR( "Unknown type: %d\n", opt_type );
-            return FALSE;
-    }
-
-    res = RegGetValueA( h_key, NULL, name, flag, NULL, value, &size );
     RegCloseKey( h_key );
     return res == ERROR_SUCCESS;
 }
@@ -792,66 +754,41 @@ static BOOL UpdateSaneScrollOption(const struct option_descriptor *opt, DWORD po
     return result;
 }
 
+
+/* @brief Set Dialog control values to SANE values
+ *
+ * Set the values of controls in the Scanner GUI property sheet dialog
+ * to those selected in the SANE parameter space.
+ * Set Combobox options to the list of possible values.
+ *
+ * @param hwnd      Property sheet Dialog window.
+ *
+ * @return Return value for dialog function WM_INITDIALOG. Always TRUE.
+ */
 static INT_PTR InitializeDialog(HWND hwnd)
 {
     TW_UINT16 rc;
     int optcount;
     HWND control;
     int i;
-    int o;
-    int *opt_order=NULL;
 
     rc = sane_option_get_value( 0, &optcount );
     if (rc != TWCC_SUCCESS)
     {
         ERR("Unable to read number of options\n");
-        optcount = gOptCount;
-    }
-    else
-        gOptCount = optcount;
-
-    /* Determine the order in which options shall be set in sane */
-    opt_order = malloc((optcount+1) * sizeof(int));
-    if (!opt_order)
-    {
-        ERR("Out of memory allocation opt_order\n");
         return FALSE;
     }
 
-    for ( o = 0; o < optcount; o++)
-    {
-        opt_order[o] = o;
-    }
-
-    for ( o = 1; o < optcount; o++)
+    for ( i = 1; i < optcount; i++)
     {
         struct option_descriptor opt;
-        opt.optno = opt_order[o];
-        SANE_CALL( option_get_descriptor, &opt );
-
-        if (!strcmp(opt.name, "source"))
-        {
-            /* Source (adf, flatbed) must be set before resolution
-             * so process it first */
-            memmove(opt_order+2,
-                    opt_order+1,
-                    (o-1) * sizeof(int));
-            opt_order[1] = opt.optno;
-        }
-    }
-
-    for ( o = 1; o < optcount; o++)
-    {
-        struct option_descriptor opt;
-
-        opt.optno =
-          i = opt_order[o];
 
         control = GetDlgItem(hwnd,i+ID_BASE);
 
         if (!control)
             continue;
 
+        opt.optno = i;
         SANE_CALL( option_get_descriptor, &opt );
 
         TRACE("%i %s %i %i\n",i,debugstr_w(opt.title),opt.type,opt.constraint_type);
@@ -863,37 +800,15 @@ static INT_PTR InitializeDialog(HWND hwnd)
         {
             CHAR buffer[255];
             WCHAR *p;
-            char oldvalue[256];
-
-            sane_option_get_value(opt.optno, oldvalue);
 
             for (p = opt.constraint.strings; *p; p += lstrlenW(p) + 1)
                 SendMessageW( control,CB_ADDSTRING,0, (LPARAM)p );
-
-            if (load_from_reg(opt.type, opt.name, buffer))
-            {
-                for (p = opt.constraint.strings; *p; p += lstrlenW(p) + 1)
-                {
-                    CHAR param[256];
-                    WideCharToMultiByte(CP_UTF8, 0, p, -1, param, sizeof(param), NULL, NULL);
-                    if (!strcmp(param, buffer))
-                    {
-                        if (strcmp(param, oldvalue))
-                            sane_option_set_value(opt.optno, buffer, NULL);
-                        break;
-                    }
-                }
-                if (!*p) ERR("%s=%s is incorrect. The default value is set!", opt.name, buffer);
-            }
-
             sane_option_get_value( i, buffer );
             SendMessageA(control,CB_SELECTSTRING,0,(LPARAM)buffer);
         }
         else if (opt.type == TYPE_BOOL)
         {
             BOOL b;
-
-            if (load_from_reg(opt.type, opt.name, &b)) sane_option_set_value( i, &b, NULL );
             sane_option_get_value( i, &b );
             SendMessageA(control,BM_SETCHECK, b ? BST_CHECKED : BST_UNCHECKED,0);
         }
@@ -907,20 +822,6 @@ static INT_PTR InitializeDialog(HWND hwnd)
                 sprintf(buffer, "%d", opt.constraint.word_list[j]);
                 SendMessageA(control, CB_ADDSTRING, 0, (LPARAM)buffer);
             }
-
-            if (load_from_reg(opt.type, opt.name, &val))
-            {
-                for (j=1; j<=count; j++)
-                {
-                    if (opt.constraint.word_list[j] == val)
-                    {
-                        sane_option_set_value( i, &val, NULL );
-                        break;
-                    }
-                }
-                if (j > count) ERR("%s=%d is incorrect. The default value is set!\n", opt.name, val);
-            }
-
             sane_option_get_value( i, &val );
             sprintf(buffer, "%d", val);
             SendMessageA(control,CB_SELECTSTRING,0,(LPARAM)buffer);
@@ -940,12 +841,6 @@ static INT_PTR InitializeDialog(HWND hwnd)
 
                 SendMessageA(control,SBM_SETRANGE,min,max);
 
-                if (load_from_reg(opt.type, opt.name, &si))
-                {
-                    if (si >= min && si <= max) sane_option_set_value( i, &si, NULL);
-                    else ERR("%s=%d is out of range [%d..%d]. The default value is used!\n", opt.name, si, min, max);
-                }
-
                 sane_option_get_value( i, &si );
                 if (opt.constraint.range.quant)
                     si = si / opt.constraint.range.quant;
@@ -955,7 +850,7 @@ static INT_PTR InitializeDialog(HWND hwnd)
             }
             else if (opt.type == TYPE_FIXED)
             {
-                int pos, min, max, *sf, val;
+                int pos, min, max, *sf;
 
                 if (opt.constraint.range.quant)
                 {
@@ -970,19 +865,6 @@ static INT_PTR InitializeDialog(HWND hwnd)
 
                 SendMessageA(control,SBM_SETRANGE,min,max);
 
-                if (load_from_reg(opt.type, opt.name, &val))
-                {
-                    if (val >= min && val <= max)
-                    {
-                        int valSet;
-                        if (opt.constraint.range.quant)
-                            valSet = val * opt.constraint.range.quant;
-                        else
-                            valSet = MulDiv(val, 65536, 100);
-                        sane_option_set_value(i, &valSet, NULL);
-                    }
-                    else ERR("%s = %d is out of range [%d..%d]. The default value is used!\n", opt.name, val, min, max);
-                }
 
                 sf = calloc( opt.size, sizeof(int) );
                 sane_option_get_value( i, sf );
@@ -1002,8 +884,6 @@ static INT_PTR InitializeDialog(HWND hwnd)
             }
         }
     }
-
-    free(opt_order);
 
     return TRUE;
 }
@@ -1140,8 +1020,7 @@ static INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM
                     case PSN_APPLY:
                         if (psn->lParam)
                         {
-                            activeDS.currentState = 6;
-                            SANE_Notify(MSG_XFERREADY);
+                            SANE_XferReady();
                         }
                         break;
                     case PSN_QUERYCANCEL:
@@ -1181,14 +1060,53 @@ static int CALLBACK PropSheetProc(HWND hwnd, UINT msg, LPARAM lParam)
 
 static INT_PTR CALLBACK ScanningProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    switch (msg)
+    {
+       case WM_INITDIALOG:
+       {
+           WCHAR buffer[34];
+           MultiByteToWideChar( CP_UNIXCP, 0, activeDS.identity.Manufacturer, -1, buffer, ARRAY_SIZE(buffer) );
+           SetDlgItemTextW(hwnd, IDC_MANUFACTURER , buffer);
+
+           MultiByteToWideChar( CP_UNIXCP, 0, activeDS.identity.ProductFamily, -1, buffer, ARRAY_SIZE(buffer) );
+           SetDlgItemTextW(hwnd, IDC_PRODUCTFAMILY, buffer);
+
+           MultiByteToWideChar( CP_UNIXCP, 0, activeDS.identity.ProductName, -1, buffer, ARRAY_SIZE(buffer) );
+           SetDlgItemTextW(hwnd, IDC_PRODUCTNAME  , buffer);
+
+           SetDlgItemInt(hwnd, IDC_PAGE, activeDS.scannedImages+1, TRUE);
+       }
+       break;
+       case WM_COMMAND:
+       {
+           switch (LOWORD(wParam))
+           {
+               case IDCANCEL:
+                   WARN("User cancelled\n");
+                   activeDS.userCancelled = TRUE;
+                   break;
+           }
+           break;
+       }
+    }
     return FALSE;
 }
 
 HWND ScanningDialogBox(HWND dialog, LONG progress)
 {
+    static DWORD tickLast=0;
+    DWORD tickNow = GetTickCount();
+
+    if (!activeDS.capIndicators &&
+        !activeDS.ShowUI)
+    {
+        return NULL;
+    }
+
     if (!dialog)
-        dialog = CreateDialogW(SANE_instance,
-                (LPWSTR)MAKEINTRESOURCE(IDD_DIALOG1), NULL, ScanningProc);
+    {
+        dialog = CreateDialogW(SANE_instance, MAKEINTRESOURCEW(IDD_SCANNING), NULL, ScanningProc);
+    }
 
     if (progress == -1)
     {
@@ -1196,8 +1114,138 @@ HWND ScanningDialogBox(HWND dialog, LONG progress)
         return NULL;
     }
 
-    RedrawWindow(dialog,NULL,NULL,
-            RDW_INTERNALPAINT|RDW_UPDATENOW|RDW_ALLCHILDREN);
+    if (tickNow - tickLast > 100)
+    {
+        MSG msg;
+        tickLast = tickNow;
+
+        /* Update progress bar */
+        SendDlgItemMessageW(dialog, IDC_PROGRESS, PBM_SETPOS, progress, 0);
+
+        /* Perform message handling */
+        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            if (!IsDialogMessageW(dialog, &msg))
+            {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+    }
 
     return dialog;
+}
+
+
+/** @brief Load all current settings from registry to sane
+ *
+ *  Called when opening a data source.
+ *  Loads all SANE options from the registry and sets them
+ *  in the SANE parameter space for later negotiation
+ *  with the CAP_xxx machanism and display in the UI.
+ */
+void
+SANE_LoadOptions(void)
+{
+    TW_UINT16 rc;
+    int optcount;
+    int o;
+    int *opt_order=NULL;
+
+    HKEY h_key;
+    DWORD size;
+
+    int ivalue;
+    char svalue[OPTION_VALUE_MAX+1];
+
+    snprintf(reg_path, MAX_PATH, "Software\\ScannersSettings\\%s\\%s_%s",
+             activeDS.identity.Manufacturer,
+             activeDS.identity.ProductFamily,
+             activeDS.identity.ProductName);
+
+    rc = sane_option_get_value( 0, &optcount );
+    if (rc != TWCC_SUCCESS)
+    {
+        ERR("SANE_LoadOptions: Unable to read number of options\n");
+        return;
+    }
+
+    if (RegOpenKeyExA( HKEY_CURRENT_USER, reg_path, 0, KEY_ALL_ACCESS, &h_key)==ERROR_SUCCESS)
+    {
+        /* Determine the order in which options shall be set in sane */
+        opt_order = malloc((optcount+1) * sizeof(int));
+        if (!opt_order)
+        {
+            ERR("Out of memory allocating opt_order\n");
+            RegCloseKey( h_key );
+            return;
+        }
+
+        for ( o = 0; o < optcount; o++)
+        {
+            opt_order[o] = o;
+        }
+
+        for ( o = 1; o < optcount; o++)
+        {
+            struct option_descriptor opt;
+            opt.optno = opt_order[o];
+            SANE_CALL( option_get_descriptor, &opt );
+
+            if (!strcmp(opt.name, "source"))
+            {
+                /* Source (adf, flatbed) must be set before resolution
+                 * so process it first */
+                memmove(opt_order+2,
+                        opt_order+1,
+                        (o-1) * sizeof(int));
+                opt_order[1] = opt.optno;
+            }
+        }
+
+        for ( o = 1; o < optcount; o++)
+        {
+            struct option_descriptor opt;
+            opt.optno = opt_order[o];
+
+            SANE_CALL( option_get_descriptor, &opt );
+
+            TRACE("%i %s %i %i\n",opt.optno,debugstr_w(opt.title),opt.type,opt.constraint_type);
+
+            switch( opt.type )
+            {
+              case TYPE_INT:
+              case TYPE_BOOL:
+                  size = sizeof(ivalue);
+                  if (RegGetValueA( h_key, NULL, opt.name, RRF_RT_REG_DWORD, NULL, &ivalue, &size)==ERROR_SUCCESS)
+                  {
+                      sane_option_set_value( opt.optno, &ivalue, NULL );
+                  }
+                  break;
+              case TYPE_FIXED:
+                  size = sizeof(ivalue);
+                  if (RegGetValueA( h_key, NULL, opt.name, RRF_RT_REG_DWORD, NULL, &ivalue, &size)==ERROR_SUCCESS)
+                  {
+                      int valSet;
+                      if (opt.constraint.range.quant)
+                          valSet = ivalue * opt.constraint.range.quant;
+                      else
+                          valSet = MulDiv(ivalue, 65536, 100);
+                      sane_option_set_value( opt.optno, &valSet, NULL);
+                  }
+                  break;
+              case TYPE_STRING:
+                  size = OPTION_VALUE_MAX;
+                  if (RegGetValueA( h_key, NULL, opt.name, RRF_RT_REG_SZ, NULL, svalue, &size)==ERROR_SUCCESS)
+                  {
+                      sane_option_set_value( opt.optno, svalue, NULL );
+                  }
+                  break;
+              default: ;
+            }
+        }
+        free(opt_order);
+
+        RegCloseKey( h_key );
+    }
 }

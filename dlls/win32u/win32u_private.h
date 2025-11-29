@@ -95,7 +95,7 @@ extern DWORD get_input_state(void);
 extern DWORD get_last_input_time(void);
 extern BOOL get_async_keyboard_state( BYTE state[256] );
 extern BOOL set_capture_window( HWND hwnd, UINT gui_flags, HWND *prev_ret );
-extern BOOL set_foreground_window( HWND hwnd, BOOL mouse );
+extern BOOL set_foreground_window( HWND hwnd, BOOL mouse, BOOL force );
 extern BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new_active_thread_id );
 extern BOOL set_ime_composition_rect( HWND hwnd, RECT rect );
 extern void toggle_caret( HWND hwnd );
@@ -275,8 +275,8 @@ extern BOOL is_window_enabled( HWND hwnd );
 extern BOOL is_window_unicode( HWND hwnd );
 extern BOOL is_window_visible( HWND hwnd );
 extern BOOL is_zoomed( HWND hwnd );
-extern BOOL set_window_pixel_format( HWND hwnd, int format, BOOL internal );
-extern int get_window_pixel_format( HWND hwnd, BOOL internal );
+extern BOOL set_window_pixel_format( HWND hwnd, int format );
+extern int get_window_pixel_format( HWND hwnd );
 extern DWORD get_window_long( HWND hwnd, INT offset );
 extern ULONG_PTR get_window_long_ptr( HWND hwnd, INT offset, BOOL ansi );
 extern BOOL get_window_rect( HWND hwnd, RECT *rect, UINT dpi );
@@ -301,6 +301,7 @@ extern HWND get_progman_window(void);
 extern HWND get_taskman_window(void);
 extern BOOL is_client_surface_window( struct client_surface *surface, HWND hwnd );
 extern HICON get_window_icon_info( HWND hwnd, UINT type, HICON icon, ICONINFO *ret );
+extern void init_startup_info(void);
 
 /* to release pointers retrieved by win_get_ptr */
 static inline void release_win_ptr( struct tagWND *ptr )

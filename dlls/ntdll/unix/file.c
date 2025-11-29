@@ -200,6 +200,7 @@ union file_directory_info
     FILE_BOTH_DIRECTORY_INFORMATION    both;
     FILE_FULL_DIRECTORY_INFORMATION    full;
     FILE_ID_BOTH_DIRECTORY_INFORMATION id_both;
+    FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION extd_both;
     FILE_ID_FULL_DIRECTORY_INFORMATION id_full;
     FILE_ID_GLOBAL_TX_DIR_INFORMATION  id_tx;
     FILE_NAMES_INFORMATION             names;
@@ -314,6 +315,8 @@ static inline unsigned int dir_info_size( FILE_INFORMATION_CLASS class, unsigned
         return offsetof( FILE_FULL_DIRECTORY_INFORMATION, FileName[len] );
     case FileIdBothDirectoryInformation:
         return offsetof( FILE_ID_BOTH_DIRECTORY_INFORMATION, FileName[len] );
+    case FileIdExtdBothDirectoryInformation:
+        return offsetof( FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION, FileName[len] );
     case FileIdFullDirectoryInformation:
         return offsetof( FILE_ID_FULL_DIRECTORY_INFORMATION, FileName[len] );
     case FileIdGlobalTxDirectoryInformation:
@@ -1767,8 +1770,9 @@ static NTSTATUS fd_set_file_info( int fd, UINT attr, BOOL force_set_xattr )
 
 
 /* get the stat info and file attributes for a file (by name) */
-static int get_file_info( const char *path, struct stat *st, ULONG *attr )
+static int get_file_info( const char *path, struct stat *st, ULONG *attr, ULONG *reparse_tag )
 {
+    char buffer[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
     size_t len = strlen( path );
     char *parent_path;
     char attr_data[65];
@@ -1782,7 +1786,11 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
         ret = stat( path, st );
         if (ret == -1) return ret;
         /* is a symbolic link and a directory, consider these "reparse points" */
-        if (S_ISDIR( st->st_mode )) *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+        if (S_ISDIR( st->st_mode ))
+        {
+            *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+            if (reparse_tag) *reparse_tag = IO_REPARSE_TAG_LX_SYMLINK;
+        }
     }
     else if (S_ISDIR( st->st_mode ) && (parent_path = malloc( len + 4 )))
     {
@@ -1793,14 +1801,21 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
         strcat( parent_path, "/.." );
         if (!stat( parent_path, &parent_st )
                 && (st->st_dev != parent_st.st_dev || st->st_ino == parent_st.st_ino))
+        {
             *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+            if (reparse_tag) *reparse_tag = IO_REPARSE_TAG_MOUNT_POINT;
+        }
 
         free( parent_path );
     }
     *attr |= get_file_attributes( st );
 
-    if (path[len - 1] == '?')
+    attr_len = xattr_get( path, XATTR_REPARSE, buffer, sizeof(buffer) );
+    if (attr_len >= 0 && attr_len >= sizeof(ULONG))
+    {
         *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+        if (reparse_tag) memcpy( reparse_tag, buffer, sizeof(ULONG) );
+    }
 
     attr_len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
     if (attr_len != -1)
@@ -2065,6 +2080,13 @@ static NTSTATUS fill_file_info( const struct stat *st, ULONG attr, void *ptr,
         {
             FILE_ID_BOTH_DIRECTORY_INFORMATION *info = ptr;
             info->FileId.QuadPart = st->st_ino;
+            fill_file_info( st, attr, info, FileDirectoryInformation );
+        }
+        break;
+    case FileIdExtdBothDirectoryInformation:
+        {
+            FILE_ID_EXTD_BOTH_DIRECTORY_INFORMATION *info = ptr;
+            *(ULONGLONG *)&info->FileId = st->st_ino;
             fill_file_info( st, attr, info, FileDirectoryInformation );
         }
         break;
@@ -2402,9 +2424,9 @@ static NTSTATUS get_dir_data_entry( struct dir_data *dir_data, void *info_ptr, I
     const struct dir_data_names *names = &dir_data->names[dir_data->pos];
     union file_directory_info *info;
     struct stat st;
-    ULONG name_len, start, dir_size, attributes;
+    ULONG name_len, start, dir_size, attributes, reparse_tag;
 
-    if (get_file_info( names->unix_name, &st, &attributes ) == -1)
+    if (get_file_info( names->unix_name, &st, &attributes, &reparse_tag ) == -1)
     {
         TRACE( "file no longer exists %s\n", debugstr_a(names->unix_name) );
         return STATUS_SUCCESS;
@@ -2462,6 +2484,14 @@ static NTSTATUS get_dir_data_entry( struct dir_data *dir_data, void *info_ptr, I
         info->id_both.ShortNameLength = wcslen( names->short_name ) * sizeof(WCHAR);
         memcpy( info->id_both.ShortName, names->short_name, info->id_both.ShortNameLength );
         info->id_both.FileNameLength = name_len;
+        break;
+
+    case FileIdExtdBothDirectoryInformation:
+        info->extd_both.EaSize = 0; /* FIXME */
+        info->extd_both.ReparsePointTag = reparse_tag;
+        info->extd_both.ShortNameLength = wcslen( names->short_name ) * sizeof(WCHAR);
+        memcpy( info->extd_both.ShortName, names->short_name, info->extd_both.ShortNameLength );
+        info->extd_both.FileNameLength = name_len;
         break;
 
     case FileIdGlobalTxDirectoryInformation:
@@ -2847,6 +2877,7 @@ NTSTATUS WINAPI NtQueryDirectoryFile( HANDLE handle, HANDLE event, PIO_APC_ROUTI
     case FileBothDirectoryInformation:
     case FileFullDirectoryInformation:
     case FileIdBothDirectoryInformation:
+    case FileIdExtdBothDirectoryInformation:
     case FileIdFullDirectoryInformation:
     case FileIdGlobalTxDirectoryInformation:
     case FileNamesInformation:
@@ -3940,6 +3971,51 @@ NTSTATUS nt_to_unix_file_name( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name,
 }
 
 
+/******************************************************************************
+ *           wine_nt_to_unix_file_name
+ *
+ * Convert a file name from NT namespace to Unix namespace.
+ *
+ * If disposition is not FILE_OPEN or FILE_OVERWRITE, the last path
+ * element doesn't have to exist; in that case STATUS_NO_SUCH_FILE is
+ * returned, but the unix name is still filled in properly.
+ */
+NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
+                                          UINT disposition )
+{
+    char *buffer = NULL;
+    NTSTATUS status;
+    UNICODE_STRING nt_name;
+    OBJECT_ATTRIBUTES new_attr = *attr;
+
+    status = get_nt_and_unix_names( &new_attr, &nt_name, &buffer, disposition, FALSE );
+    if (!status || status == STATUS_NO_SUCH_FILE)
+    {
+        struct stat st1, st2;
+        char *name = buffer;
+
+        /* remove dosdevices prefix for z: drive if it points to the Unix root */
+        if (!strncmp( buffer, config_dir, strlen(config_dir) ) &&
+            !strncmp( buffer + strlen(config_dir), "/dosdevices/z:/", 15 ))
+        {
+            char *p = buffer + strlen(config_dir) + 14;
+            *p = 0;
+            if (!stat( buffer, &st1 ) && !stat( "/", &st2 ) &&
+                st1.st_dev == st2.st_dev && st1.st_ino == st2.st_ino)
+                name = p;
+            *p = '/';
+        }
+
+        if (*size > strlen(name)) strcpy( nameA, name );
+        else status = STATUS_BUFFER_TOO_SMALL;
+        *size = strlen(name) + 1;
+    }
+    free( buffer );
+    free( nt_name.Buffer );
+    return status;
+}
+
+
 /******************************************************************
  *		collapse_path
  *
@@ -4062,6 +4138,76 @@ static NTSTATUS resolve_absolute_reparse_point( const WCHAR *target, unsigned in
 }
 
 
+/* limited version of collapse_path() that only deals with . and .. elements
+ * in relative symlinks */
+static NTSTATUS collapse_relative_symlink( WCHAR *path, unsigned int len, unsigned int *ret_len )
+{
+    const WCHAR *end = path + len;
+    WCHAR *p, *start, *next;
+
+    if (path[0] == '\\')
+    {
+        p = path + 4;
+        while (*p && *p != '\\') p++;
+        p++;
+    }
+    else
+    {
+        p = path;
+    }
+    start = p;
+
+    while (p < end)
+    {
+        if (*p == '.')
+        {
+            if (p + 1 == end) /* final . */
+            {
+                if (p > start) p--;
+                end = p;
+                continue;
+            }
+            else if (p[1] == '\\') /* .\ component */
+            {
+                next = p + 2;
+                memmove( p, next, (end - next) * sizeof(WCHAR) );
+                end -= 2;
+                continue;
+            }
+            else if (p[1] == '.')
+            {
+                if (p + 2 == end) /* final .. */
+                {
+                    if (p == start) return STATUS_IO_REPARSE_DATA_INVALID;
+                    p--;
+                    while (p > start && p[-1] != '\\') p--;
+                    if (p > start) p--;
+                    end = p;
+                    continue;
+                }
+                else if (p[2] == '\\') /* ..\ component */
+                {
+                    if (p == start) return STATUS_IO_REPARSE_DATA_INVALID;
+                    next = p + 3;
+                    p--;
+                    while (p > start && p[-1] != '\\') p--;
+                    memmove( p, next, (end - next) * sizeof(WCHAR) );
+                    end -= (next - p);
+                    continue;
+                }
+            }
+        }
+
+        /* skip to the next component */
+        while (p < end && *p != '\\') p++;
+        if (p < end) p++;
+    }
+
+    *ret_len = end - path;
+    return STATUS_SUCCESS;
+}
+
+
 static NTSTATUS resolve_reparse_point( int fd, int root_fd, OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name,
         unsigned int nt_pos, unsigned int reparse_len, char **unix_name, int unix_len, int pos,
         UINT disposition, BOOL open_reparse, BOOL is_unix, unsigned int reparse_count )
@@ -4107,6 +4253,7 @@ static NTSTATUS resolve_reparse_point( int fd, int root_fd, OBJECT_ATTRIBUTES *a
 
         if (data->SymbolicLinkReparseBuffer.Flags & SYMLINK_FLAG_RELATIVE)
         {
+            unsigned int collapsed_len;
             WCHAR *new_nt_name;
 
             TRACE( "target %s\n", debugstr_wn(target, target_len) );
@@ -4125,17 +4272,32 @@ static NTSTATUS resolve_reparse_point( int fd, int root_fd, OBJECT_ATTRIBUTES *a
 
             memcpy( new_nt_name, name, nt_pos * sizeof(WCHAR) );
             memcpy( new_nt_name + nt_pos, target, target_len * sizeof(WCHAR) );
+
+            if ((status = collapse_relative_symlink( new_nt_name, nt_pos + target_len, &collapsed_len )))
+            {
+                if (attr->RootDirectory)
+                {
+                    /* FIXME: it's legal to unwind past the root directory (but
+                     * not past the volume root), which we can't detect here.
+                     * We need to retrieve the whole NT name */
+                    FIXME( "attempt to unwind past root directory %s\n", debugstr_wn(target, target_len) );
+                }
+                free( new_nt_name );
+                free( data );
+                return status;
+            }
+
             if (remainder_len)
             {
-                if (target[target_len - 1] != '\\')
-                    new_nt_name[nt_pos + target_len++] = '\\';
-                memcpy( new_nt_name + nt_pos + target_len, remainder, remainder_len * sizeof(WCHAR) );
+                if (new_nt_name[collapsed_len - 1] != '\\')
+                    new_nt_name[collapsed_len++] = '\\';
+                memcpy( new_nt_name + collapsed_len, remainder, remainder_len * sizeof(WCHAR) );
             }
-            new_nt_name[nt_pos + target_len + remainder_len] = 0;
+            new_nt_name[collapsed_len + remainder_len] = 0;
 
             free( nt_name->Buffer );
             nt_name->Buffer = new_nt_name;
-            nt_name->Length = (nt_pos + target_len + remainder_len) * sizeof(WCHAR);
+            nt_name->Length = (collapsed_len + remainder_len) * sizeof(WCHAR);
             nt_name->MaximumLength = nt_name->Length + sizeof(WCHAR);
             attr->ObjectName = nt_name;
 
@@ -4834,7 +4996,7 @@ NTSTATUS WINAPI NtQueryFullAttributesFile( const OBJECT_ATTRIBUTES *attr,
         ULONG attributes;
         struct stat st;
 
-        if (get_file_info( unix_name, &st, &attributes ) == -1)
+        if (get_file_info( unix_name, &st, &attributes, NULL ) == -1)
             status = errno_to_status( errno );
         else if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
             status = STATUS_INVALID_INFO_CLASS;
@@ -4863,7 +5025,7 @@ NTSTATUS WINAPI NtQueryAttributesFile( const OBJECT_ATTRIBUTES *attr, FILE_BASIC
         ULONG attributes;
         struct stat st;
 
-        if (get_file_info( unix_name, &st, &attributes ) == -1)
+        if (get_file_info( unix_name, &st, &attributes, NULL ) == -1)
             status = errno_to_status( errno );
         else if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
             status = STATUS_INVALID_INFO_CLASS;

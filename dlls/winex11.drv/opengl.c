@@ -529,11 +529,8 @@ static BOOL x11drv_egl_surface_create( HWND hwnd, int format, struct opengl_draw
     struct client_surface *client;
     struct gl_drawable *gl;
     Window window;
-    RECT rect;
 
     if ((previous = *drawable) && previous->format == format) return TRUE;
-    NtUserGetClientRect( hwnd, &rect, NtUserGetDpiForWindow( hwnd ) );
-
     if (!(window = x11drv_client_surface_create( hwnd, format, &client ))) return FALSE;
     gl = opengl_drawable_create( sizeof(*gl), &x11drv_egl_surface_funcs, format, client );
     client_surface_release( client );
@@ -583,6 +580,8 @@ UINT X11DRV_OpenGLInit( UINT version, const struct opengl_funcs *opengl_funcs, c
         *driver_funcs = &x11drv_driver_funcs;
         return STATUS_SUCCESS;
     }
+
+    use_egl = FALSE;
 
     /* No need to load any other libraries as according to the ABI, libGL should be self-sufficient
        and include all dependencies */
@@ -967,11 +966,8 @@ static BOOL x11drv_surface_create( HWND hwnd, int format, struct opengl_drawable
     struct client_surface *client;
     struct gl_drawable *gl;
     Window window;
-    RECT rect;
 
     if ((previous = *drawable) && previous->format == format) return TRUE;
-    NtUserGetClientRect( hwnd, &rect, NtUserGetDpiForWindow( hwnd ) );
-
     if (!(window = x11drv_client_surface_create( hwnd, format, &client ))) return FALSE;
     gl = opengl_drawable_create( sizeof(*gl), &x11drv_surface_funcs, format, client );
     client_surface_release( client );
