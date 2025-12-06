@@ -31,7 +31,6 @@ Applied hotfix a608ef1.mypatch
 Applied hotfix nostale_mouse_fix.mypatch
 Applied hotfix opencl-fixup.mypatch
 Applied your own patch disable-hidraw-and-evdev.mypatch
-Applied your own patch enable_emulate_modeset.mypatch
 Applied your own patch hags.mypatch
 
 wine-tkg-staging.patch -- ( Please don't report bugs about this wine build on winehq.org and use https://github.com/Frogging-Family/wine-tkg-git/issues instead. )
