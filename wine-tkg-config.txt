@@ -1,9 +1,9 @@
-# Last wine-tkg-staging-ntsync-git configuration - Sat Nov 29 09:36:18 AM UTC 2025 :
+# Last wine-tkg-staging-ntsync-git configuration - Sat Dec  6 11:01:25 AM UTC 2025 :
 
 Local cfg files used
 
-Wine (plain) version: 10.20.r0.g4dfbf077cf7
-Using wine-staging patchset (version 10.20.r0.g54f4c57f)
+Wine (plain) version: 11.0rc1.r0.ga3d49dbc8db
+Using wine-staging patchset (version 11.0rc1.r0.gb6ba963a)
 
 Not using vkd3d native library for d3d12 translation (allows using vkd3d-proton)
 
@@ -31,6 +31,7 @@ Applied hotfix a608ef1.mypatch
 Applied hotfix nostale_mouse_fix.mypatch
 Applied hotfix opencl-fixup.mypatch
 Applied your own patch disable-hidraw-and-evdev.mypatch
+Applied your own patch enable_emulate_modeset.mypatch
 Applied your own patch hags.mypatch
 
 wine-tkg-staging.patch -- ( Please don't report bugs about this wine build on winehq.org and use https://github.com/Frogging-Family/wine-tkg-git/issues instead. )

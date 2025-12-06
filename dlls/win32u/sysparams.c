@@ -166,7 +166,7 @@ static INT64 last_query_display_time;
 static UINT64 monitor_update_serial;
 static pthread_mutex_t display_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static BOOL emulate_modeset;
+static BOOL emulate_modeset = TRUE;
 BOOL decorated_mode = TRUE;
 UINT64 thunk_lock_callback = 0;
 
@@ -510,7 +510,7 @@ static BOOL read_source_mode( HKEY hkey, UINT index, DEVMODEW *mode )
     else return FALSE;
 
     if (!query_reg_ascii_value( hkey, key, value, sizeof(value_buf) )) return FALSE;
-    memcpy( &mode->dmFields, value->Data, sizeof(*mode) - offsetof(DEVMODEW, dmFields) );
+    memcpy( &mode->dmFields, value->Data, offsetof(DEVMODEW, dmICMMethod) - offsetof(DEVMODEW, dmFields) );
     return TRUE;
 }
 
@@ -554,7 +554,7 @@ static BOOL source_set_registry_settings( const struct source *source, const DEV
 
 static BOOL source_get_current_settings( const struct source *source, DEVMODEW *mode )
 {
-    memcpy( &mode->dmFields, &source->current.dmFields, sizeof(*mode) - offsetof(DEVMODEW, dmFields) );
+    memcpy( &mode->dmFields, &source->current.dmFields, offsetof(DEVMODEW, dmICMMethod) - offsetof(DEVMODEW, dmFields) );
     if (source->depth) mode->dmBitsPerPel = source->depth;
     return TRUE;
 }
@@ -4447,7 +4447,7 @@ static BOOL source_enum_display_settings( const struct source *source, UINT inde
             continue;
         if (!i--)
         {
-            memcpy( &devmode->dmFields, &source_mode->dmFields, devmode->dmSize - FIELD_OFFSET(DEVMODEW, dmFields) );
+            memcpy( &devmode->dmFields, &source_mode->dmFields, offsetof(DEVMODEW, dmICMMethod) - FIELD_OFFSET(DEVMODEW, dmFields) );
             devmode->dmDisplayFlags &= ~WINE_DM_UNSUPPORTED;
             return TRUE;
         }
