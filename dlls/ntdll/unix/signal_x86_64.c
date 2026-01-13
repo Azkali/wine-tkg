@@ -2138,8 +2138,8 @@ static void install_bpf(struct sigaction *sig_act)
     struct sock_fprog prog;
     NTSTATUS status;
 
-    if ((ULONG_PTR)sc_seccomp < NATIVE_SYSCALL_ADDRESS_START
-            || (ULONG_PTR)syscall < NATIVE_SYSCALL_ADDRESS_START)
+    if (/*(ULONG_PTR)sc_seccomp < NATIVE_SYSCALL_ADDRESS_START
+            || (ULONG_PTR)syscall < NATIVE_SYSCALL_ADDRESS_START*/0)
     {
         ERR_(seh)("Native libs are being loaded in low addresses, sc_seccomp %p, syscall %p, not installing seccomp.\n",
                 sc_seccomp, syscall);
