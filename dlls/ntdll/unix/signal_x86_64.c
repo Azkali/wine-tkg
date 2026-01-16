@@ -2155,9 +2155,9 @@ static void install_bpf(struct sigaction *sig_act)
 
 
 
-    test_syscall = mmap((void *)0x600000000000, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (test_syscall != (void *)0x600000000000)
+    test_syscall = mmap(NULL, 0x1000, PROT_EXEC | PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (test_syscall == MAP_FAILED)
     {
         int ret;
 
